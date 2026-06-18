@@ -1,33 +1,27 @@
-<template>
-  Example STORE {{ count }}
-  <RouterLink :to="{ name: $routes.INDEX }" >To Index</RouterLink>
-  <input v-model="value" type="number">
-  <input v-model="timeout" type="number">
-  <button @click="() => inc()">+</button>
-  <button @click="() => setValue()">SET</button>
-
-  <div>
-    <div v-for="i in list" :key="i">{{ i }}</div>
-  </div>
+﻿<template>
+  <main class="c-example-page">
+    <RouterLink class="c-example-page__link" :to="{ name: $routes.INDEX }">
+      Вернуться на стартовую страницу
+    </RouterLink>
+  </main>
 </template>
 
-<script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useStore } from 'vuex'
-const store = useStore()
-const count = computed(() => store.getters.getCount)
-const list = computed(() => store.getters['list/getList'])
-
-const value = ref(1)
-const timeout = ref(0)
-
-const inc = () => store.dispatch('runIncrement', value.value)
-const setValue = () => store.dispatch('setCount', {
-  value: value.value,
-  timeout: timeout.value
-})
+<script>
+export default {
+  name: 'ExamplePage'
+}
 </script>
 
-<style scoped>
+<style lang="scss">
+.c-example-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #080b0f;
 
+  &__link {
+    color: #ffffff;
+  }
+}
 </style>

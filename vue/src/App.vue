@@ -1,9 +1,12 @@
-<template>
+﻿<template>
   <RouterView />
 </template>
 
-<script setup>
+<script>
+export default {
+  name: 'App'
+}
 </script>
 
-<style scoped lang="scss">
+<style lang="scss">
 </style>

@@ -1,27 +1,26 @@
-import { createWebHistory, createRouter } from 'vue-router'
-
-import IndexPage from './../components/pages/IndexPage.vue'
-import ExamplePage from './../components/pages/ExamplePage.vue'
+﻿import { createWebHistory, createRouter } from 'vue-router'
+import IndexPage from '@/components/pages/IndexPage.vue'
+import MapPage from '@/components/pages/MapPage.vue'
 
 export const ROUTES = {
-  EXAMPLE: 'EXAMPLE',
   INDEX: 'INDEX',
+  MAP: 'MAP'
 }
 
 const routes = [
-  {
-    name: ROUTES.EXAMPLE,
-    path: '/example',
-    component: ExamplePage
-  },
   {
     name: ROUTES.INDEX,
     path: '/',
     component: IndexPage
   },
+  {
+    name: ROUTES.MAP,
+    path: '/map',
+    component: MapPage
+  }
 ]
 
 export const router = createRouter({
   history: createWebHistory('/'),
-  routes,
+  routes
 })
