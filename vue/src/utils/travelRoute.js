@@ -138,7 +138,8 @@ export const getRoadRoute = (points) => {
   const coordinates = points
     .map((point) => `${Number(point[1])},${Number(point[0])}`)
     .join(';')
-  const url = `https://router.project-osrm.org/route/v1/foot/${coordinates}?overview=full&geometries=geojson`
+  const routeBaseUrl = import.meta.env.VITE_OSRM_ROUTE_URL || 'https://router.project-osrm.org'
+  const url = `${routeBaseUrl}/route/v1/foot/${coordinates}?overview=full&geometries=geojson`
 
   return fetch(url)
     .then((response) => {

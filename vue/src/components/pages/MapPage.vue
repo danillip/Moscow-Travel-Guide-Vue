@@ -3,14 +3,16 @@
     <section class="c-map-page__panel">
       <header class="c-map-page__header">
         <div class="c-map-page__brandBlock">
-          <p class="c-map-page__eyebrow">Moscow Sightseeing Guide</p>
+          <div class="c-map-page__topLine">
+            <p class="c-map-page__eyebrow">Moscow Sightseeing Guide</p>
+
+            <RouterLink class="c-map-page__back" :to="{ name: $routes.INDEX }">
+              <span class="c-map-page__backIcon">←</span>
+              <span class="c-map-page__backText">Старт</span>
+            </RouterLink>
+          </div>
           <h1 class="c-map-page__title">Достопримечательности Москвы</h1>
         </div>
-
-        <RouterLink class="c-map-page__back" :to="{ name: $routes.INDEX }">
-          <span class="c-map-page__backIcon">←</span>
-          <span class="c-map-page__backText">Старт</span>
-        </RouterLink>
       </header>
 
       <div class="c-map-page__summary">
@@ -26,25 +28,6 @@
           <span class="c-map-page__summaryValue">{{ humanSpeed }}</span>
           <span class="c-map-page__summaryLabel">км/ч</span>
         </div>
-      </div>
-
-      <div class="c-map-page__toolRow">
-        <button class="c-map-page__infoToggle" type="button" @click="() => toggleInfo()">
-          <span class="c-map-page__infoToggleText">{{ sideOpen ? 'Скрыть подсказки' : 'Подсказки маршрута' }}</span>
-          <span class="c-map-page__infoToggleIcon">{{ sideOpen ? 'x' : 'i' }}</span>
-        </button>
-
-        <button class="c-map-page__settingsBtn" type="button" @click="() => toggleSettings()">
-          <span class="c-map-page__settingsIcon">?</span>
-        </button>
-      </div>
-
-      <div v-if="sideOpen" class="c-map-page__info">
-        <button class="c-map-page__infoClose" type="button" @click="() => toggleInfo()">+</button>
-        <h2 class="c-map-page__infoTitle">Как успеть посмотреть больше</h2>
-        <p class="c-map-page__infoText">ЛКМ по карте добавляет достопримечательность в план прогулки.</p>
-        <p class="c-map-page__infoText">ПКМ по метке убирает место из маршрута.</p>
-        <p class="c-map-page__infoText">Цель страницы - помочь успеть посетить максимум интересных мест за доступное время. В будущем сюда можно добавить покупку билетов и бронирование экскурсий.</p>
       </div>
 
       <div class="c-map-page__controls">
@@ -81,6 +64,33 @@
         </div>
       </div>
 
+      <div class="c-map-page__toolGrid">
+        <button class="c-map-page__toolBtn c-map-page__toolBtn--catalog" type="button" @click="() => toggleCatalog()">
+          <span class="c-map-page__toolIcon">+</span>
+          <span class="c-map-page__toolText">Каталог мест</span>
+        </button>
+
+        <button class="c-map-page__toolBtn" type="button" @click="() => toggleInfo()">
+          <span class="c-map-page__toolIcon">i</span>
+          <span class="c-map-page__toolText">Подсказки</span>
+        </button>
+
+        <button
+          class="c-map-page__toolBtn"
+          :disabled="!alternativeRoutes.length"
+          type="button"
+          @click="() => toggleSavedRoutes()"
+        >
+          <span class="c-map-page__toolIcon">{{ alternativeRoutes.length }}</span>
+          <span class="c-map-page__toolText">Планы</span>
+        </button>
+
+        <button class="c-map-page__toolBtn" type="button" @click="() => toggleSettings()">
+          <span class="c-map-page__toolIcon">&#9881;</span>
+          <span class="c-map-page__toolText">Настройки</span>
+        </button>
+      </div>
+
       <div class="c-map-page__status" :class="routeInfoClass">
         <span class="c-map-page__statusLabel">Успеешь посмотреть</span>
         <span class="c-map-page__statusText">{{ routeInfo.message }}</span>
@@ -90,15 +100,6 @@
         {{ alternativeDistance }}
       </div>
 
-      <button
-        v-if="alternativeRoutes.length"
-        class="c-map-page__savedToggle"
-        type="button"
-        @click="() => toggleSavedRoutes()"
-      >
-        <span class="c-map-page__savedToggleText">Сохраненные планы</span>
-        <span class="c-map-page__savedToggleCount">{{ alternativeRoutes.length }}</span>
-      </button>
     </section>
 
     <section class="c-map-page__mapWrap">
@@ -106,9 +107,104 @@
         <div v-if="isMapLoading" class="c-map-page__loader">Карта загружается...</div>
         <div v-if="mapError" class="c-map-page__error">{{ mapError }}</div>
         <div class="c-map-page__mapOverlay">
+          <form class="c-map-page__search" @submit.prevent="() => searchMapLocation()">
+            <input
+              class="c-map-page__searchInput"
+              type="text"
+              placeholder="Найти достопримечательность"
+              v-model.trim="searchQuery"
+            >
+            <button class="c-map-page__searchBtn" type="submit">Найти</button>
+          </form>
           <span class="c-map-page__mapHint">Добавляй достопримечательности прямо на карте</span>
         </div>
         <div ref="map" class="c-map-page__map"></div>
+      </div>
+    </section>
+
+    <section
+      v-if="sideOpen"
+      ref="infoWindow"
+      class="c-map-page__infoWindow"
+      :style="infoPanelStyle"
+    >
+      <header class="c-map-page__infoHead" @mousedown="(event) => startInfoDrag(event)">
+        <div>
+          <span class="c-map-page__infoKicker">route tips</span>
+          <h2 class="c-map-page__infoTitle">Как успеть посмотреть больше</h2>
+        </div>
+        <button class="c-map-page__infoClose" type="button" @click="() => closeInfo()">&times;</button>
+      </header>
+
+      <div class="c-map-page__infoBody">
+        <p class="c-map-page__infoText">ЛКМ по карте добавляет достопримечательность в план прогулки.</p>
+        <p class="c-map-page__infoText">ПКМ по метке убирает место из маршрута.</p>
+        <p class="c-map-page__infoText">Цель страницы - помочь успеть посетить максимум интересных мест за доступное время. В будущем сюда можно добавить покупку билетов и бронирование экскурсий.</p>
+      </div>
+    </section>
+
+    <section
+      v-if="catalogOpen"
+      ref="catalogWindow"
+      class="c-map-page__catalogWindow"
+      :style="catalogPanelStyle"
+    >
+      <header class="c-map-page__catalogHead" @mousedown="(event) => startCatalogDrag(event)">
+        <div>
+          <span class="c-map-page__catalogKicker">каталог мест</span>
+          <h2 class="c-map-page__catalogTitle">Выбери достопримечательности</h2>
+        </div>
+        <div class="c-map-page__catalogControls">
+          <span class="c-map-page__catalogCounter">{{ routePoints.length }}/{{ places.length }}</span>
+          <button class="c-map-page__catalogClose" type="button" @click="() => closeCatalog()">&times;</button>
+        </div>
+      </header>
+
+      <div class="c-map-page__catalog">
+        <div class="c-map-page__categoryList">
+          <button
+            v-for="category in placeCategories"
+            :key="category"
+            class="c-map-page__categoryBtn"
+            :class="{ 'c-map-page__categoryBtn--active': activeCategory === category }"
+            type="button"
+            @click="() => setActiveCategory(category)"
+          >
+            {{ category }}
+          </button>
+        </div>
+
+        <div class="c-map-page__placeList">
+          <article
+            v-for="place in filteredPlaces"
+            :key="place.id"
+            class="c-map-page__placeCard"
+            :class="{ 'c-map-page__placeCard--selected': isPlaceSelected(place) }"
+          >
+            <div class="c-map-page__placeTop">
+              <div>
+                <h3 class="c-map-page__placeTitle">{{ place.title }}</h3>
+                <p class="c-map-page__placeCategory">{{ place.category }} · {{ place.visitMinutes }} мин</p>
+              </div>
+            </div>
+            <p class="c-map-page__placeDescription">{{ place.description }}</p>
+            <div class="c-map-page__placeMeta">
+              <span class="c-map-page__placeBadge">{{ place.ticketStatus }}</span>
+              <span class="c-map-page__placeHighlight">{{ place.highlight }}</span>
+            </div>
+            <div class="c-map-page__placeActions">
+              <button class="c-map-page__placeBtn" type="button" @click="() => togglePlace(place)">
+                {{ isPlaceSelected(place) ? 'Убрать' : 'В маршрут' }}
+              </button>
+              <button class="c-map-page__placeBtn" type="button" @click="() => focusPlace(place)">
+                На карте
+              </button>
+              <button class="c-map-page__placeBtn c-map-page__placeBtn--ticket" type="button" @click="() => showTicketStub(place)">
+                Билеты
+              </button>
+            </div>
+          </article>
+        </div>
       </div>
     </section>
 
@@ -123,7 +219,7 @@
           <span class="c-map-page__settingsKicker">visual settings</span>
           <h2 class="c-map-page__settingsTitle">Оформление карты</h2>
         </div>
-        <button class="c-map-page__settingsClose" type="button" @click="() => closeSettings()">×</button>
+        <button class="c-map-page__settingsClose" type="button" @click="() => closeSettings()">&times;</button>
       </header>
 
       <div class="c-map-page__settingsBody">
@@ -141,6 +237,22 @@
             <span class="c-map-page__themeSwatch" :style="{ background: theme.accent }"></span>
             <span class="c-map-page__themeName">{{ theme.name }}</span>
           </button>
+        </div>
+
+        <div class="c-map-page__routeColorList">
+          <h3 class="c-map-page__settingsSubtitle">Цвета маршрутов</h3>
+          <label class="c-map-page__routeColorField">
+            <span class="c-map-page__routeColorText">Основной</span>
+            <input class="c-map-page__routeColorInput" type="color" v-model="routeColors.main">
+          </label>
+          <label class="c-map-page__routeColorField">
+            <span class="c-map-page__routeColorText">Альтернативный</span>
+            <input class="c-map-page__routeColorInput" type="color" v-model="routeColors.alternative">
+          </label>
+          <label class="c-map-page__routeColorField">
+            <span class="c-map-page__routeColorText">Дейкстра</span>
+            <input class="c-map-page__routeColorInput" type="color" v-model="routeColors.dijkstra">
+          </label>
         </div>
 
         <div class="c-map-page__futureBox">
@@ -161,7 +273,7 @@
           <span class="c-map-page__savedKicker">route archive</span>
           <h2 class="c-map-page__savedTitle">Сохраненные планы</h2>
         </div>
-        <button class="c-map-page__savedClose" type="button" @click="() => closeSavedRoutes()">×</button>
+        <button class="c-map-page__savedClose" type="button" @click="() => closeSavedRoutes()">&times;</button>
       </header>
 
       <div class="c-map-page__saved">
@@ -183,8 +295,8 @@
 
 <script>
 import { mapActions, mapGetters } from 'vuex'
-import { MAP_COLORS, ROUTE_DEFAULTS } from '@/constants/travelConfig.js'
-import { TRAVEL_MARKS } from '@/constants/travelMarks.js'
+import { ROUTE_DEFAULTS } from '@/constants/travelConfig.js'
+import { TRAVEL_MARKS, TRAVEL_PLACES } from '@/constants/travelMarks.js'
 import {
   createDijkstraRoute,
   createRotatedRoute,
@@ -201,19 +313,40 @@ export default {
       sideOpen: false,
       isMapLoading: true,
       mapError: '',
+      mapErrorTimer: null,
+      searchQuery: '',
+      places: TRAVEL_PLACES,
+      activeCategory: 'Все',
+      focusedPlaceId: '',
+      catalogOpen: false,
+      catalogPosition: {
+        x: 380,
+        y: 110
+      },
+      catalogDrag: null,
+      infoPosition: {
+        x: 380,
+        y: 126
+      },
+      infoDrag: null,
       settingsOpen: false,
       selectedThemeIndex: 0,
       settingsPosition: {
-        x: 430,
-        y: 88
+        x: 760,
+        y: 96
       },
       settingsDrag: null,
       savedRoutesOpen: false,
       savedRoutesPosition: {
-        x: 430,
-        y: 90
+        x: 760,
+        y: 318
       },
       savedRoutesDrag: null,
+      routeColors: {
+        main: '#00d084',
+        alternative: '#ff9f1c',
+        dijkstra: '#2f80ff'
+      },
       themes: [
         {
           name: 'Мятный вечер',
@@ -237,13 +370,13 @@ export default {
       actionButtons: [
         {
           method: 'calculateRoute',
-          text: 'Рассчитать маршрут',
+          text: 'Рассчитать план',
           icon: '01',
           className: 'c-map-page__button--primary'
         },
         {
           method: 'showAlternativeRoute',
-          text: 'Альтернативный план',
+          text: 'Альтернативный',
           icon: 'A',
           className: ''
         },
@@ -255,13 +388,13 @@ export default {
         },
         {
           method: 'optimizeRoutePlus',
-          text: 'Добавить точку умно',
+          text: 'Добавить место',
           icon: '+',
           className: ''
         },
         {
           method: 'optimizeRouteMinus',
-          text: 'Сократить маршрут',
+          text: 'Сократить',
           icon: '−',
           className: ''
         },
@@ -313,6 +446,18 @@ export default {
         top: `${this.savedRoutesPosition.y}px`
       }
     },
+    catalogPanelStyle() {
+      return {
+        left: `${this.catalogPosition.x}px`,
+        top: `${this.catalogPosition.y}px`
+      }
+    },
+    infoPanelStyle() {
+      return {
+        left: `${this.infoPosition.x}px`,
+        top: `${this.infoPosition.y}px`
+      }
+    },
     settingsPanelStyle() {
       return {
         left: `${this.settingsPosition.x}px`,
@@ -326,10 +471,24 @@ export default {
       return {
         '--c-map-accent': this.selectedTheme.accent,
         '--c-map-warm': this.selectedTheme.warm,
-        '--c-map-panel': this.selectedTheme.panel
+        '--c-map-panel': this.selectedTheme.panel,
+        '--c-route-main': this.routeColors.main,
+        '--c-route-alternative': this.routeColors.alternative,
+        '--c-route-dijkstra': this.routeColors.dijkstra
       }
+    },
+    placeCategories() {
+      return ['Все', ...new Set(this.places.map((place) => place.category))]
+    },
+    filteredPlaces() {
+      if (this.activeCategory === 'Все') {
+        return this.places
+      }
+
+      return this.places.filter((place) => place.category === this.activeCategory)
     }
   },
+
   mounted() {
     this.loadYandexApi()
       .then(() => this.initMap())
@@ -339,6 +498,11 @@ export default {
       })
   },
   beforeUnmount() {
+    window.clearTimeout(this.mapErrorTimer)
+    window.removeEventListener('mousemove', this.onCatalogDrag)
+    window.removeEventListener('mouseup', this.stopCatalogDrag)
+    window.removeEventListener('mousemove', this.onInfoDrag)
+    window.removeEventListener('mouseup', this.stopInfoDrag)
     window.removeEventListener('mousemove', this.onSavedRoutesDrag)
     window.removeEventListener('mouseup', this.stopSavedRoutesDrag)
     window.removeEventListener('mousemove', this.onSettingsDrag)
@@ -364,11 +528,149 @@ export default {
     runAction(methodName) {
       this[methodName]()
     },
+    setActiveCategory(category) {
+      this.activeCategory = category
+    },
+    isSamePoint(firstPoint, secondPoint) {
+      return Math.abs(firstPoint[0] - secondPoint[0]) < 0.000001 && Math.abs(firstPoint[1] - secondPoint[1]) < 0.000001
+    },
+    isPlaceSelected(place) {
+      return this.routePoints.some((point) => this.isSamePoint(point, place.coordinates))
+    },
+    getPlaceByCoords(coords) {
+      return this.places.find((place) => this.isSamePoint(place.coordinates, coords))
+    },
+    togglePlace(place) {
+      const index = this.routePoints.findIndex((point) => this.isSamePoint(point, place.coordinates))
+
+      if (index >= 0) {
+        this.removeLandmark(index)
+      } else {
+        this.addLandmark(place.coordinates)
+      }
+
+      this.refreshMapObjects()
+    },
+    focusPlace(place) {
+      if (!this._map) {
+        return
+      }
+
+      this.focusedPlaceId = place.id
+      this._map.setCenter(place.coordinates, 16, { duration: 300 })
+      this.renderFocusedPlace()
+    },
+    showTicketStub(place) {
+      this.setRouteInfo({
+        canVisit: null,
+        distanceKm: 0,
+        totalSeconds: 0,
+        message: `Билеты для «${place.title}» пока в режиме заглушки. Позже сюда можно подключить афиши, экскурсии и бронирование.`
+      })
+    },
     toggleInfo() {
       this.sideOpen = !this.sideOpen
+      this.$nextTick(() => {
+        this.infoPosition = this.getLimitedPanelPosition(
+          this.infoPosition.x,
+          this.infoPosition.y,
+          this.$refs.infoWindow,
+          380,
+          260
+        )
+      })
+    },
+    closeInfo() {
+      this.sideOpen = false
+    },
+    startInfoDrag(event) {
+      if (event.target.closest('.c-map-page__infoClose')) {
+        return
+      }
+
+      this.infoDrag = {
+        shiftX: event.clientX - this.infoPosition.x,
+        shiftY: event.clientY - this.infoPosition.y
+      }
+
+      window.addEventListener('mousemove', this.onInfoDrag)
+      window.addEventListener('mouseup', this.stopInfoDrag)
+    },
+    onInfoDrag(event) {
+      if (!this.infoDrag) {
+        return
+      }
+
+      this.infoPosition = this.getLimitedPanelPosition(
+        event.clientX - this.infoDrag.shiftX,
+        event.clientY - this.infoDrag.shiftY,
+        this.$refs.infoWindow,
+        380,
+        260
+      )
+    },
+    stopInfoDrag() {
+      this.infoDrag = null
+      window.removeEventListener('mousemove', this.onInfoDrag)
+      window.removeEventListener('mouseup', this.stopInfoDrag)
+    },
+    toggleCatalog() {
+      this.catalogOpen = !this.catalogOpen
+      this.$nextTick(() => {
+        this.catalogPosition = this.getLimitedPanelPosition(
+          this.catalogPosition.x,
+          this.catalogPosition.y,
+          this.$refs.catalogWindow,
+          720,
+          620
+        )
+      })
+    },
+    closeCatalog() {
+      this.catalogOpen = false
+    },
+    startCatalogDrag(event) {
+      if (event.target.closest('.c-map-page__catalogClose')) {
+        return
+      }
+
+      this.catalogDrag = {
+        shiftX: event.clientX - this.catalogPosition.x,
+        shiftY: event.clientY - this.catalogPosition.y
+      }
+
+      window.addEventListener('mousemove', this.onCatalogDrag)
+      window.addEventListener('mouseup', this.stopCatalogDrag)
+    },
+    onCatalogDrag(event) {
+      if (!this.catalogDrag) {
+        return
+      }
+
+      this.catalogPosition = this.getLimitedPanelPosition(
+        event.clientX - this.catalogDrag.shiftX,
+        event.clientY - this.catalogDrag.shiftY,
+        this.$refs.catalogWindow,
+        720,
+        560
+      )
+    },
+    stopCatalogDrag() {
+      this.catalogDrag = null
+      window.removeEventListener('mousemove', this.onCatalogDrag)
+      window.removeEventListener('mouseup', this.stopCatalogDrag)
     },
     toggleSettings() {
       this.settingsOpen = !this.settingsOpen
+      this.$nextTick(() => {
+        this.settingsPosition = this.getLimitedPanelPosition(
+          this.settingsPosition.x,
+          this.settingsPosition.y,
+          this.$refs.settingsWindow,
+          360,
+          390
+        )
+      })
     },
     closeSettings() {
       this.settingsOpen = false
@@ -409,6 +711,9 @@ export default {
     },
     toggleSavedRoutes() {
       this.savedRoutesOpen = !this.savedRoutesOpen
+      this.$nextTick(() => {
+        this.savedRoutesPosition = this.getLimitedSavedRoutesPosition(this.savedRoutesPosition.x, this.savedRoutesPosition.y)
+      })
     },
     closeSavedRoutes() {
       this.savedRoutesOpen = false
@@ -455,11 +760,62 @@ export default {
         y: Math.min(Math.max(12, y), maxY)
       }
     },
+    showMapError(message) {
+      window.clearTimeout(this.mapErrorTimer)
+      this.mapError = message
+      const timerId = window.setTimeout(() => {
+        if (this.mapErrorTimer === timerId) {
+          this.mapError = ''
+          this.mapErrorTimer = null
+        }
+      }, 3600)
+      this.mapErrorTimer = timerId
+    },
+    clearMapError() {
+      window.clearTimeout(this.mapErrorTimer)
+      this.mapError = ''
+      this.mapErrorTimer = null
+    },
     loadYandexApi() {
       if (window.ymaps) {
         return Promise.resolve()
       }
 
+      const mapsKey = import.meta.env.VITE_YANDEX_MAPS_API_KEY
+
+      if (!mapsKey) {
+        return Promise.reject(new Error('VITE_YANDEX_MAPS_API_KEY is empty'))
+      }
+
+      const existingScript = document.getElementById('yandex-map-api')
+
+      if (existingScript) {
+        return this.waitYandexApi()
+      }
+
+      return new Promise((resolve, reject) => {
+        const params = new URLSearchParams({
+          apikey: mapsKey,
+          lang: 'ru_RU',
+          load: 'package.full',
+          mode: import.meta.env.VITE_YANDEX_MAPS_MODE || 'release'
+        })
+        const suggestKey = import.meta.env.VITE_YANDEX_SUGGEST_API_KEY
+
+        if (suggestKey) {
+          params.set('suggest_apikey', suggestKey)
+        }
+
+        const script = document.createElement('script')
+        script.id = 'yandex-map-api'
+        script.type = 'text/javascript'
+        script.src = `https://api-maps.yandex.ru/2.1/?${params.toString()}`
+        script.onload = () => this.waitYandexApi().then(resolve).catch(reject)
+        script.onerror = () => reject(new Error('Yandex Maps script failed'))
+        document.head.appendChild(script)
+      })
+    },
+    waitYandexApi() {
       return new Promise((resolve, reject) => {
         let attempts = 0
         const timerId = window.setInterval(() => {
@@ -473,7 +829,7 @@ export default {
 
           if (attempts > 80) {
             window.clearInterval(timerId)
-            reject()
+            reject(new Error('Yandex Maps API timeout'))
           }
         }, 100)
       })
@@ -483,13 +839,40 @@ export default {
         this._map = new window.ymaps.Map(this.$refs.map, {
           center: ROUTE_DEFAULTS.center,
           zoom: ROUTE_DEFAULTS.zoom,
-          controls: ['zoomControl', 'searchControl', 'typeSelector']
+          controls: ['zoomControl', 'typeSelector']
         })
 
         this._map.events.add('click', (event) => this.handleMapClick(event))
         this.isMapLoading = false
         this.refreshMapObjects()
       })
+    },
+    searchMapLocation() {
+      if (!this.searchQuery || !this._map || !window.ymaps) {
+        return
+      }
+
+      window.ymaps.geocode(this.searchQuery, {
+        results: 1,
+        boundedBy: [[55.45, 37.25], [56.05, 38.05]]
+      })
+        .then((result) => {
+          const item = result.geoObjects.get(0)
+
+          if (!item) {
+            this.showMapError('Место не найдено. Попробуй уточнить запрос.')
+            return
+          }
+
+          const coords = item.geometry.getCoordinates()
+          this.clearMapError()
+          this._map.setCenter(coords, 15, { duration: 300 })
+          this.addLandmark(coords)
+          this.refreshMapObjects()
+        })
+        .catch(() => {
+          this.showMapError('Поиск не сработал. Проверь API-ключ и подключение к интернету.')
+        })
     },
     handleMapClick(event) {
       const coords = event.get('coords')
@@ -520,14 +903,44 @@ export default {
       }
 
       this._map.geoObjects.removeAll()
+      this.renderFocusedPlace()
       this.renderPlacemarks(points)
+    },
+    renderFocusedPlace() {
+      const place = this.places.find((item) => item.id === this.focusedPlaceId)
+
+      if (!place || !window.ymaps) {
+        return
+      }
+
+      if (this._focusedMarker) {
+        this._map.geoObjects.remove(this._focusedMarker)
+      }
+
+      const marker = new window.ymaps.Placemark(place.coordinates, {
+        iconContent: '●',
+        balloonContentHeader: place.title,
+        balloonContentBody: `${place.category} · ${place.visitMinutes} мин<br>${place.description}`,
+        balloonContentFooter: place.highlight
+      }, {
+        preset: 'islands#redStretchyIcon'
+      })
+
+      this._map.geoObjects.add(marker)
+      this._focusedMarker = marker
+      window.setTimeout(() => marker.balloon.open(), 120)
     },
     renderPlacemarks(points) {
       points.forEach((coords, index) => {
+        const place = this.getPlaceByCoords(coords)
+        const isFocused = place && place.id === this.focusedPlaceId
         const placemark = new window.ymaps.Placemark(coords, {
-          iconContent: String(index + 1)
+          iconContent: String(index + 1),
+          balloonContentHeader: place ? place.title : `Точка ${index + 1}`,
+          balloonContentBody: place ? `${place.description}<br><strong>${place.ticketStatus}</strong>` : 'Пользовательская точка маршрута',
+          balloonContentFooter: place ? place.highlight : 'Можно убрать правой кнопкой мыши'
         }, {
-          preset: 'islands#blueStretchyIcon'
+          preset: isFocused ? 'islands#redStretchyIcon' : place ? 'islands#greenStretchyIcon' : 'islands#blueStretchyIcon'
         })
 
         placemark.events.add('contextmenu', (event) => {
@@ -536,6 +949,7 @@ export default {
         })
 
         this._map.geoObjects.add(placemark)
+
       })
     },
     getYandexPoints(points) {
@@ -545,7 +959,61 @@ export default {
       this._map.geoObjects.removeAll()
       const yandexPoints = this.getYandexPoints(points)
 
-      return getRoadRoute(yandexPoints).then((roadRoute) => {
+      return this.buildYandexRoute(yandexPoints, color)
+        .catch((yandexError) => {
+          console.warn('Yandex route build failed', {
+            error: yandexError,
+            points: yandexPoints,
+            routeFunctionExists: Boolean(window.ymaps && window.ymaps.route)
+          })
+
+          return this.buildOsrmRoute(yandexPoints, color)
+        })
+    },
+    buildYandexRoute(points, color) {
+      if (!window.ymaps || typeof window.ymaps.route !== 'function') {
+        return Promise.reject(new Error('ymaps.route is unavailable'))
+      }
+
+      return window.ymaps.route(points, {
+        multiRoute: true,
+        routingMode: 'pedestrian',
+        mapStateAutoApply: false
+      }).then((route) => {
+        this._map.geoObjects.add(route)
+        this.styleYandexRoute(route, color)
+        this.renderPlacemarks(points)
+
+        if (typeof route.getBounds === 'function') {
+          this._map.setBounds(route.getBounds(), {
+            checkZoomRange: true,
+            zoomMargin: 48
+          })
+        }
+
+        return route
+      })
+    },
+    styleYandexRoute(route, color) {
+      if (route.options && typeof route.options.set === 'function') {
+        route.options.set({
+          routeActiveStrokeColor: color,
+          routeStrokeColor: color,
+          routeActiveStrokeWidth: 6,
+          routeStrokeWidth: 5
+        })
+      }
+
+      if (route.getPaths && route.getPaths().options) {
+        route.getPaths().options.set({
+          strokeColor: color,
+          strokeWidth: 5,
+          strokeOpacity: 0.9
+        })
+      }
+    },
+    buildOsrmRoute(points, color) {
+      return getRoadRoute(points).then((roadRoute) => {
         const polyline = new window.ymaps.Polyline(roadRoute.points, {}, {
           strokeColor: color,
           strokeWidth: 5,
@@ -553,7 +1021,7 @@ export default {
         })
 
         this._map.geoObjects.add(polyline)
-        this.renderPlacemarks(yandexPoints)
+        this.renderPlacemarks(points)
         this._map.setBounds(polyline.geometry.getBounds(), {
           checkZoomRange: true,
           zoomMargin: 40
@@ -601,6 +1069,15 @@ export default {
 
       if (route && typeof route.getHumanLength === 'function') {
         return parseHumanDistance(route.getHumanLength())
+      }
+
+      if (route && typeof route.getActiveRoute === 'function') {
+        const activeRoute = route.getActiveRoute()
+        const distance = activeRoute && activeRoute.properties && activeRoute.properties.get('distance')
+
+        if (distance && typeof distance.value === 'number') {
+          return distance.value / 1000
+        }
       }
 
       return null
@@ -669,7 +1146,7 @@ export default {
       }
 
       this.setAlternativeDistance('')
-      this.drawRoute(this.routePoints, MAP_COLORS.main, 'Основной план прогулки')
+      this.drawRoute(this.routePoints, this.routeColors.main, 'Основной план прогулки')
     },
     showAlternativeRoute() {
       if (!this.validateRoute()) {
@@ -677,7 +1154,7 @@ export default {
       }
 
       const points = createRotatedRoute(this.routePoints)
-      this.drawRoute(points, MAP_COLORS.alternative, 'Альтернативный план')
+      this.drawRoute(points, this.routeColors.alternative, 'Альтернативный план')
         .then((info) => {
           if (info) {
             this.setAlternativeDistance(`Дистанция альтернативного плана: ${info.distanceText}`)
@@ -690,7 +1167,7 @@ export default {
       }
 
       const points = createDijkstraRoute(this.routePoints)
-      this.drawRoute(points, MAP_COLORS.dijkstra, 'Маршрут Дейкстры')
+      this.drawRoute(points, this.routeColors.dijkstra, 'Маршрут Дейкстры')
     },
     optimizeRoutePlus() {
       if (!this.validateRoute()) {
@@ -736,10 +1213,12 @@ export default {
       this.setSelectedRouteIndex(index)
       this.setLandmarks(route.points)
       this.$nextTick(() => {
-        this.drawRoute(route.points, MAP_COLORS.alternative)
+        this.drawRoute(route.points, this.routeColors.alternative)
       })
     },
     resetMap() {
+      this.focusedPlaceId = ''
+      this._focusedMarker = null
       this.resetTravel()
       this.refreshMapObjects()
     }
@@ -757,8 +1236,8 @@ export default {
   --c-map-accent: #6df2cd;
   --c-map-warm: #ffb15e;
   display: grid;
-  grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);
-  height: 100vh;
+  grid-template-columns: minmax(344px, 380px) minmax(0, 1fr);
+  height: 100dvh;
   overflow: hidden;
   background:
     radial-gradient(circle at 12% 16%, rgba(109, 242, 205, 0.18), transparent 28%),
@@ -773,10 +1252,9 @@ export default {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    height: 100vh;
-    padding: 14px 16px;
-    overflow-x: hidden;
-    overflow-y: auto;
+    height: 100dvh;
+    padding: 18px;
+    overflow: hidden;
     border-right: 1px solid var(--c-map-line);
     background:
       linear-gradient(180deg, var(--c-map-panel), rgba(9, 12, 11, 0.84)),
@@ -786,18 +1264,23 @@ export default {
   }
 
   &__header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 16px;
+    display: block;
   }
 
   &__brandBlock {
     min-width: 0;
   }
 
+  &__topLine {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 7px;
+  }
+
   &__eyebrow {
-    margin: 0 0 8px;
+    margin: 0;
     color: var(--c-map-accent);
     font-size: 11px;
     font-weight: 800;
@@ -806,20 +1289,21 @@ export default {
   }
 
   &__title {
-    max-width: 270px;
+    max-width: 320px;
     margin: 0;
     font-family: Georgia, serif;
-    font-size: clamp(30px, 3vw, 42px);
-    line-height: 0.95;
-    letter-spacing: -0.06em;
+    font-size: 30px;
+    line-height: 1.02;
+    letter-spacing: 0;
   }
 
   &__back {
     display: inline-flex;
+    flex-shrink: 0;
     align-items: center;
     gap: 8px;
-    min-height: 38px;
-    padding: 0 12px;
+    min-height: 34px;
+    padding: 0 10px;
     border: 1px solid var(--c-map-line);
     border-radius: 999px;
     color: var(--c-map-text);
@@ -838,7 +1322,7 @@ export default {
   }
 
   &__backText {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 800;
   }
 
@@ -850,8 +1334,9 @@ export default {
 
   &__summaryItem {
     display: grid;
-    gap: 4px;
-    padding: 10px;
+    gap: 2px;
+    min-width: 0;
+    padding: 9px 10px;
     border: 1px solid var(--c-map-line);
     border-radius: 18px;
     background: var(--c-map-card);
@@ -860,22 +1345,30 @@ export default {
   &__summaryValue {
     color: var(--c-map-accent);
     font-family: Georgia, serif;
-    font-size: 22px;
+    font-size: 21px;
     line-height: 1;
   }
 
   &__summaryLabel {
     color: var(--c-map-muted);
     font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     text-transform: uppercase;
   }
 
   &__infoToggle,
   &__settingsBtn,
+  &__toolBtn,
   &__button,
   &__savedToggle,
   &__savedBtn,
-  &__themeBtn {
+  &__themeBtn,
+  &__searchBtn,
+  &__routeColorField,
+  &__catalogClose,
+  &__infoClose {
     border: 1px solid var(--c-map-line);
     background: rgba(255, 255, 255, 0.06);
     color: var(--c-map-text);
@@ -889,12 +1382,59 @@ export default {
     }
   }
 
+  &__toolGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  &__toolBtn {
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    min-height: 42px;
+    padding: 6px 10px;
+    border-radius: 16px;
+    text-align: left;
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.48;
+      transform: none;
+    }
+
+    &--catalog {
+      border-color: rgba(109, 242, 205, 0.48);
+      background: rgba(109, 242, 205, 0.12);
+    }
+  }
+
+  &__toolIcon {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 12px;
+    background: rgba(247, 238, 220, 0.12);
+    color: var(--c-map-accent);
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  &__toolText {
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 900;
+    overflow-wrap: anywhere;
+  }
+
   &__infoToggle {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    min-height: 48px;
-    padding: 0 10px 0 16px;
+    min-height: 42px;
+    padding: 0 8px 0 14px;
     border-radius: 16px;
     font-weight: 800;
   }
@@ -902,8 +1442,8 @@ export default {
   &__infoToggleIcon {
     display: grid;
     place-items: center;
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     background: var(--c-map-accent);
     color: #06100d;
@@ -911,14 +1451,14 @@ export default {
 
   &__toolRow {
     display: grid;
-    grid-template-columns: 1fr 48px;
+    grid-template-columns: 1fr 42px;
     gap: 8px;
   }
 
   &__settingsBtn {
     display: grid;
     place-items: center;
-    min-height: 48px;
+    min-height: 42px;
     border-radius: 16px;
   }
 
@@ -938,50 +1478,82 @@ export default {
     transform: rotate(45deg);
   }
 
-  &__info {
-    position: absolute;
-    left: 20px;
-    right: 20px;
-    top: 172px;
-    z-index: 5;
-    padding: 24px;
-    border: 1px solid rgba(109, 242, 205, 0.34);
+  &__infoWindow {
+    position: fixed;
+    z-index: 22;
+    width: min(380px, calc(100vw - 24px));
+    overflow: hidden;
+    border: 1px solid rgba(247, 238, 220, 0.22);
     border-radius: 24px;
-    background: rgba(246, 238, 220, 0.96);
-    color: #0a0f0e;
-    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+    background:
+      linear-gradient(145deg, rgba(8, 16, 14, 0.9), rgba(8, 16, 14, 0.72)),
+      radial-gradient(circle at 18% 0%, rgba(255, 177, 94, 0.18), transparent 40%);
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.44);
+    backdrop-filter: blur(18px);
     animation: c-map-panel-in 0.24s ease;
   }
 
-  &__infoClose {
-    position: absolute;
-    top: 8px;
-    right: 12px;
-    border: none;
-    background: transparent;
-    color: #0a0f0e;
-    cursor: pointer;
-    font-size: 30px;
-    transform: rotate(45deg);
+  &__infoHead {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 18px 12px;
+    border-bottom: 1px solid rgba(247, 238, 220, 0.12);
+    cursor: grab;
+    user-select: none;
+
+    &:active {
+      cursor: grabbing;
+    }
+  }
+
+  &__infoKicker {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--c-map-accent);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
   }
 
   &__infoTitle {
-    margin: 0 0 12px;
+    margin: 0;
     font-family: Georgia, serif;
     font-size: 24px;
-    letter-spacing: -0.04em;
+    line-height: 1;
+  }
+
+  &__infoClose {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 24px;
+    line-height: 1;
+  }
+
+  &__infoBody {
+    display: grid;
+    gap: 10px;
+    padding: 16px 18px 18px;
   }
 
   &__infoText {
-    margin: 8px 0;
-    color: rgba(10, 15, 14, 0.72);
+    margin: 0;
+    color: var(--c-map-muted);
+    font-size: 13px;
     line-height: 1.45;
   }
 
   &__controls {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
     min-height: auto;
     overflow: visible;
   }
@@ -989,17 +1561,17 @@ export default {
   &__fieldGrid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    gap: 8px;
   }
 
   &__field {
     display: grid;
-    gap: 8px;
+    gap: 5px;
   }
 
   &__label {
     color: var(--c-map-muted);
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
   }
 
@@ -1010,14 +1582,14 @@ export default {
 
   &__input {
     width: 100%;
-    min-height: 42px;
-    padding: 0 42px 0 14px;
+    min-height: 40px;
+    padding: 0 40px 0 12px;
     border: 1px solid rgba(247, 238, 220, 0.2);
     border-radius: 16px;
     outline: none;
     background: rgba(247, 238, 220, 0.94);
     color: #0a0f0e;
-    font-size: 18px;
+    font-size: 19px;
     font-weight: 800;
     transition: all 0.22s ease;
 
@@ -1039,17 +1611,18 @@ export default {
 
   &__buttonGrid {
     display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 8px;
   }
 
   &__button {
     position: relative;
     display: grid;
-    grid-template-columns: 30px 1fr;
+    grid-template-columns: 28px minmax(0, 1fr);
     align-items: center;
-    gap: 10px;
+    gap: 9px;
     min-height: 44px;
-    padding: 7px 12px;
+    padding: 7px 10px;
     border-radius: 16px;
     overflow: hidden;
     text-align: left;
@@ -1068,6 +1641,7 @@ export default {
     }
 
     &--primary {
+      grid-column: 1 / -1;
       border-color: rgba(109, 242, 205, 0.62);
       background: linear-gradient(120deg, rgba(109, 242, 205, 0.2), rgba(255, 177, 94, 0.1));
     }
@@ -1087,8 +1661,8 @@ export default {
   &__buttonIcon {
     display: grid;
     place-items: center;
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
     border-radius: 12px;
     background: rgba(247, 238, 220, 0.1);
     color: var(--c-map-accent);
@@ -1097,7 +1671,12 @@ export default {
   }
 
   &__buttonText {
+    min-width: 0;
+    font-size: 13px;
     font-weight: 800;
+    line-height: 1.15;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   &__status,
@@ -1111,9 +1690,11 @@ export default {
 
   &__status {
     display: grid;
-    gap: 7px;
-    padding: 14px;
-    min-height: 84px;
+    gap: 6px;
+    min-height: 72px;
+    max-height: 118px;
+    padding: 12px;
+    overflow: auto;
 
     &--success {
       border-color: rgba(109, 242, 205, 0.42);
@@ -1137,7 +1718,7 @@ export default {
   &__statusText {
     color: rgba(247, 238, 220, 0.9);
     font-size: 13px;
-    line-height: 1.45;
+    line-height: 1.35;
   }
 
   &__distance {
@@ -1151,8 +1732,8 @@ export default {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    min-height: 48px;
-    padding: 0 12px 0 16px;
+    min-height: 40px;
+    padding: 0 10px 0 14px;
     font-weight: 900;
   }
 
@@ -1171,6 +1752,7 @@ export default {
     position: fixed;
     z-index: 21;
     width: min(360px, calc(100vw - 24px));
+    max-height: min(560px, calc(100dvh - 24px));
     overflow: hidden;
     border: 1px solid rgba(247, 238, 220, 0.22);
     border-radius: 26px;
@@ -1239,7 +1821,9 @@ export default {
   &__settingsBody {
     display: grid;
     gap: 14px;
+    max-height: calc(100dvh - 126px);
     padding: 14px;
+    overflow: auto;
   }
 
   &__settingsText,
@@ -1282,6 +1866,49 @@ export default {
     font-weight: 900;
   }
 
+  &__settingsSubtitle {
+    margin: 0;
+    color: var(--c-map-text);
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  &__routeColorList {
+    display: grid;
+    gap: 8px;
+  }
+
+  &__routeColorField {
+    display: grid;
+    grid-template-columns: 1fr 42px;
+    align-items: center;
+    gap: 10px;
+    min-height: 42px;
+    padding: 8px 10px;
+    border-radius: 16px;
+  }
+
+  &__routeColorText {
+    min-width: 0;
+    font-weight: 900;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__routeColorInput {
+    width: 42px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: 10px;
+    overflow: hidden;
+    background: transparent;
+    cursor: pointer;
+  }
+
   &__futureBox {
     display: grid;
     gap: 6px;
@@ -1305,7 +1932,7 @@ export default {
     display: grid;
     grid-template-rows: auto minmax(0, 1fr);
     width: min(520px, calc(100vw - 24px));
-    max-height: min(520px, calc(100vh - 24px));
+    max-height: min(520px, calc(100dvh - 24px));
     overflow: hidden;
     border: 1px solid rgba(247, 238, 220, 0.22);
     border-radius: 28px;
@@ -1405,70 +2032,338 @@ export default {
     font-size: 12px;
   }
 
+  &__catalogWindow {
+    position: fixed;
+    z-index: 19;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    width: min(720px, calc(100vw - 48px));
+    max-height: min(620px, calc(100dvh - 32px));
+    overflow: hidden;
+    border: 1px solid rgba(247, 238, 220, 0.22);
+    border-radius: 28px;
+    background:
+      linear-gradient(145deg, rgba(8, 16, 14, 0.86), rgba(8, 16, 14, 0.68)),
+      radial-gradient(circle at 12% 0%, rgba(109, 242, 205, 0.2), transparent 38%);
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.44);
+    backdrop-filter: blur(18px);
+    animation: c-map-panel-in 0.24s ease;
+  }
+
+
+  &__catalog {
+    display: grid;
+    gap: 12px;
+    min-height: 0;
+    padding: 16px;
+    overflow: hidden;
+  }
+
+  &__catalogHead {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid rgba(247, 238, 220, 0.12);
+    cursor: grab;
+    user-select: none;
+
+    &:active {
+      cursor: grabbing;
+    }
+  }
+
+  &__catalogKicker {
+    color: var(--c-map-accent);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  &__catalogTitle {
+    margin: 4px 0 0;
+    color: var(--c-map-text);
+    font-size: 24px;
+    line-height: 1.05;
+  }
+
+  &__catalogControls {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__catalogCounter {
+    padding: 7px 10px;
+    border-radius: 999px;
+    background: rgba(109, 242, 205, 0.14);
+    color: var(--c-map-accent);
+    font-weight: 900;
+  }
+
+  &__catalogClose {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 24px;
+    line-height: 1;
+  }
+
+  &__categoryList {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+    gap: 8px;
+    overflow: visible;
+  }
+
+  &__categoryBtn {
+    min-height: 38px;
+    padding: 8px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--c-map-muted);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.15;
+    transition: all 0.24s ease;
+
+    &--active,
+    &:hover {
+      border-color: var(--c-map-accent);
+      background: rgba(109, 242, 205, 0.15);
+      color: var(--c-map-text);
+    }
+  }
+
+  &__placeList {
+    display: grid;
+    gap: 10px;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 6px;
+  }
+
+  &__placeCard {
+    display: grid;
+    gap: 9px;
+    padding: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    border-radius: 18px;
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.035));
+    transition: all 0.24s ease;
+
+    &--selected {
+      border-color: var(--c-map-accent);
+      box-shadow: inset 0 0 0 1px rgba(109, 242, 205, 0.12), 0 16px 40px rgba(0, 0, 0, 0.2);
+    }
+  }
+
+  &__placeTop {
+    display: block;
+  }
+
+  &__placeTitle {
+    margin: 0;
+    color: var(--c-map-text);
+    font-size: 16px;
+    line-height: 1.08;
+  }
+
+  &__placeCategory,
+  &__placeDescription,
+  &__placeHighlight,
+  &__placeBadge {
+    margin: 0;
+    color: var(--c-map-muted);
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  &__placeMeta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__placeBadge {
+    flex: 0 0 auto;
+    padding: 5px 8px;
+    border-radius: 999px;
+    background: rgba(255, 177, 94, 0.1);
+    color: rgba(255, 202, 133, 0.94);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.03em;
+  }
+
+  &__placeHighlight {
+    flex: 1 1 220px;
+    color: var(--c-map-accent);
+    font-weight: 800;
+  }
+
+  &__placeActions {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+  }
+
+  &__placeBtn {
+    min-height: 34px;
+    padding: 7px 9px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.22);
+    color: var(--c-map-text);
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 900;
+    transition: all 0.24s ease;
+
+    &:hover {
+      border-color: var(--c-map-accent);
+      background: rgba(109, 242, 205, 0.14);
+    }
+
+    &--ticket {
+      color: var(--c-map-warm);
+    }
+  }
+
   &__mapWrap {
     position: relative;
     min-width: 0;
-    height: 100vh;
-    padding: 18px 18px 18px 0;
+    height: 100dvh;
+    padding: 0;
   }
 
   &__mapFrame {
     position: relative;
     width: 100%;
     height: 100%;
-    overflow: hidden;
-    border: 1px solid rgba(247, 238, 220, 0.18);
-    border-radius: 30px;
+    overflow: visible;
+    border: none;
+    border-radius: 0;
     background: #101315;
-    box-shadow: 0 30px 100px rgba(0, 0, 0, 0.4);
+    box-shadow: none;
   }
 
   &__map {
     width: 100%;
     height: 100%;
+    border-radius: 0;
   }
 
   &__mapOverlay {
     position: absolute;
-    top: 18px;
-    left: 18px;
+    top: 20px;
+    left: 22px;
     z-index: 2;
     display: flex;
     align-items: center;
     gap: 10px;
-    max-width: min(520px, calc(100% - 36px));
-    padding: 9px 12px;
+    max-width: min(560px, calc(100% - 44px));
+    min-height: 52px;
+    padding: 8px 10px;
     border: 1px solid rgba(9, 12, 11, 0.14);
     border-radius: 999px;
     background: rgba(247, 238, 220, 0.86);
     color: #08100e;
     box-shadow: 0 12px 34px rgba(0, 0, 0, 0.18);
-    pointer-events: none;
+    pointer-events: auto;
   }
 
 
   &__mapHint {
     color: rgba(8, 16, 14, 0.7);
-    font-size: 13px;
+    max-width: 160px;
+    font-size: 12px;
     font-weight: 800;
+    line-height: 1.15;
+  }
+
+  &__search {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) auto;
+    gap: 8px;
+    width: min(360px, calc(100vw - 36px));
+  }
+
+  &__searchInput {
+    min-width: 0;
+    min-height: 38px;
+    padding: 0 14px;
+    border: 1px solid rgba(8, 16, 14, 0.16);
+    border-radius: 999px;
+    outline: none;
+    background: rgba(255, 255, 255, 0.88);
+    color: #08100e;
+    font-weight: 800;
+
+    &:focus {
+      border-color: var(--c-map-accent);
+      box-shadow: 0 0 0 4px rgba(109, 242, 205, 0.2);
+    }
+  }
+
+  &__searchBtn {
+    min-height: 38px;
+    padding: 0 14px;
+    border-radius: 999px;
+    background: #08100e;
+    color: var(--c-map-accent);
+    font-weight: 900;
   }
 
   &__loader,
   &__error {
     position: absolute;
-    left: 50%;
-    top: 22px;
-    z-index: 3;
-    transform: translateX(-50%);
-    padding: 12px 18px;
-    border-radius: 999px;
+    top: 86px;
+    right: 28px;
+    z-index: 6;
+    max-width: min(460px, calc(100% - 56px));
+    padding: 14px 18px;
+    border-radius: 18px;
     background: rgba(8, 16, 14, 0.84);
     color: var(--c-map-text);
-    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.18);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.26);
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 1.35;
+  }
+
+  &__loader {
+    left: 50%;
+    right: auto;
+    top: 24px;
+    transform: translateX(-50%);
+    border-radius: 999px;
   }
 
   &__error {
-    background: rgba(128, 24, 24, 0.9);
+    background: rgba(128, 24, 24, 0.92);
+    animation: c-map-toast-in 0.18s ease;
+  }
+}
+
+@keyframes c-map-toast-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -1486,7 +2381,20 @@ export default {
 
 @media (max-width: 1040px) {
   .c-map-page {
-    grid-template-columns: 340px minmax(0, 1fr);
+    grid-template-columns: 330px minmax(0, 1fr);
+
+    &__title {
+      font-size: 27px;
+    }
+
+    &__buttonGrid,
+    &__toolGrid {
+      grid-template-columns: 1fr;
+    }
+
+    &__button--primary {
+      grid-column: auto;
+    }
   }
 }
 
@@ -1500,6 +2408,7 @@ export default {
     &__panel {
       height: auto;
       min-height: auto;
+      overflow: visible;
       border-right: none;
       border-bottom: 1px solid var(--c-map-line);
     }
@@ -1511,21 +2420,45 @@ export default {
     &__mapWrap {
       height: 70vh;
       min-height: 560px;
-      padding: 0 16px 16px;
+      padding: 0;
     }
 
     &__mapOverlay {
-      align-items: flex-start;
+      align-items: stretch;
       flex-direction: column;
+      left: 12px;
+      right: 12px;
+      max-width: none;
       border-radius: 20px;
     }
 
+    &__mapHint {
+      max-width: none;
+    }
+
+    &__search {
+      width: 100%;
+      grid-template-columns: 1fr;
+    }
+
     &__settingsWindow,
-    &__savedWindow {
+    &__savedWindow,
+    &__catalogWindow,
+    &__infoWindow {
       left: 12px !important;
       right: 12px;
       top: 12px !important;
       width: auto;
+    }
+
+    &__catalogWindow {
+      max-height: calc(100dvh - 24px);
+    }
+
+    &__error {
+      top: 122px;
+      right: 12px;
+      max-width: calc(100% - 24px);
     }
   }
 }
@@ -1534,16 +2467,36 @@ export default {
   .c-map-page {
     &__header,
     &__summary,
-    &__fieldGrid {
+    &__fieldGrid,
+    &__toolGrid {
       grid-template-columns: 1fr;
     }
 
-    &__header {
+    &__topLine {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    &__toolBtn--catalog {
+      grid-column: auto;
+    }
+
+    &__placeTop,
+    &__catalogHead {
       display: grid;
     }
 
-    &__back {
-      justify-self: start;
+    &__catalogControls {
+      justify-content: space-between;
+    }
+
+    &__placeActions {
+      grid-template-columns: 1fr;
+    }
+
+    &__categoryList {
+      grid-template-columns: 1fr;
     }
   }
 }
