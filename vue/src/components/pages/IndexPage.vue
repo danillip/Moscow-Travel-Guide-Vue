@@ -34,23 +34,58 @@
               </p>
 
               <div class="c-intro__actions">
-                <button class="c-intro__start" type="button" @click="() => startTravel()">
+                <button
+                  class="c-intro__start"
+                  type="button"
+                  @mouseenter="(event) => animateStartButton(event)"
+                  @click="() => startTravel()"
+                >
                   <span class="c-intro__startText">Открыть карту</span>
                   <span class="c-intro__startIcon">→</span>
                 </button>
                 <span class="c-intro__hint">ЛКМ по карте ставит метки маршрута</span>
               </div>
+
+              <dl class="c-intro__projectStats">
+                <div class="c-intro__projectStat">
+                  <dt class="c-intro__projectValue">{{ placesCount }}</dt>
+                  <dd class="c-intro__projectLabel">доступных мест</dd>
+                </div>
+                <div class="c-intro__projectStat">
+                  <dt class="c-intro__projectValue">{{ categoriesCount }}</dt>
+                  <dd class="c-intro__projectLabel">категорий</dd>
+                </div>
+                <div class="c-intro__projectStat">
+                  <dt class="c-intro__projectValue">{{ averageVisitMinutes }}</dt>
+                  <dd class="c-intro__projectLabel">мин. на точку</dd>
+                </div>
+              </dl>
             </div>
 
             <aside class="c-intro__routeCard">
-              <span class="c-intro__routeNumber">01</span>
-              <span class="c-intro__routeText">Выбирай точки</span>
-              <span class="c-intro__routeLine"></span>
-              <span class="c-intro__routeNumber">02</span>
-              <span class="c-intro__routeText">Строй путь</span>
-              <span class="c-intro__routeLine"></span>
-              <span class="c-intro__routeNumber">03</span>
-              <span class="c-intro__routeText">Сравнивай альтернативы</span>
+              <header class="c-intro__routeHead">
+                <span class="c-intro__routeKicker">пример маршрута</span>
+                <h2 class="c-intro__routeTitle">Прогулка на сегодня</h2>
+              </header>
+
+              <ol class="c-intro__routeList">
+                <li
+                  v-for="(place, index) in featuredRoute.places"
+                  :key="place.id"
+                  class="c-intro__routeItem"
+                >
+                  <span class="c-intro__routeNumber">{{ getRouteNumber(index) }}</span>
+                  <span class="c-intro__routePlace">
+                    <span class="c-intro__routeText">{{ place.title }}</span>
+                    <span class="c-intro__routeMeta">{{ place.category }} · {{ place.visitMinutes }} мин</span>
+                  </span>
+                </li>
+              </ol>
+
+              <div class="c-intro__routeSummary">
+                <span class="c-intro__routeTime">{{ formattedRouteTime }}</span>
+                <span class="c-intro__routeSummaryText">включая прогулку между точками</span>
+              </div>
             </aside>
           </div>
         </div>
@@ -64,11 +99,21 @@
 </template>
 
 <script>
+import { animate, stagger } from 'motion'
 import { ROUTES } from '@/router/index.js'
+import { TRAVEL_PLACES } from '@/constants/travelMarks.js'
 import layerBack from '@/assets/travel/images/layer-1.jpg'
 import layerMiddle from '@/assets/travel/images/layer-2.png'
 import layerFront from '@/assets/travel/images/layer-5.png'
 import layerFog from '@/assets/travel/images/layer-6.png'
+
+const FEATURED_ROUTE_GROUPS = [
+  ['kremlin', 'red-square', 'st-basil'],
+  ['kremlin', 'zaryadye', 'tretyakov'],
+  ['cathedral', 'pushkin', 'arbat'],
+  ['bolshoi', 'red-square', 'zaryadye'],
+  ['gorky-park', 'tretyakov', 'cathedral']
+]
 
 export default {
   name: 'IndexPage',
@@ -78,6 +123,11 @@ export default {
       moveY: 0,
       rainItems: [],
       rainRafId: null,
+      motionControls: [],
+      featuredRoute: {
+        places: [],
+        totalMinutes: 0
+      },
       layers: [
         {
           name: 'back',
@@ -107,14 +157,44 @@ export default {
       return {
         transform: `rotateX(${this.moveY}deg) rotateY(${this.moveX}deg)`
       }
+    },
+    placesCount() {
+      return TRAVEL_PLACES.length
+    },
+    categoriesCount() {
+      return new Set(TRAVEL_PLACES.map((place) => place.category)).size
+    },
+    averageVisitMinutes() {
+      const totalMinutes = TRAVEL_PLACES.reduce((sum, place) => sum + place.visitMinutes, 0)
+
+      return Math.round(totalMinutes / TRAVEL_PLACES.length)
+    },
+    formattedRouteTime() {
+      const hours = Math.floor(this.featuredRoute.totalMinutes / 60)
+      const minutes = this.featuredRoute.totalMinutes % 60
+
+      if (!hours) {
+        return `${minutes} мин`
+      }
+
+      return `около ${hours} ч ${minutes} мин`
     }
+  },
+  created() {
+    this.featuredRoute = this.createFeaturedRoute()
   },
   mounted() {
     this.setupRain()
+    this.$nextTick(() => this.animateIntroPanel())
     window.addEventListener('resize', this.setupRain)
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.setupRain)
+    this.motionControls.forEach((control) => {
+      if (control && control.stop) {
+        control.stop()
+      }
+    })
 
     if (this.rainRafId) {
       window.cancelAnimationFrame(this.rainRafId)
@@ -127,6 +207,54 @@ export default {
     },
     startTravel() {
       this.$router.push({ name: ROUTES.MAP })
+    },
+    createFeaturedRoute() {
+      const routeIds = FEATURED_ROUTE_GROUPS[Math.floor(Math.random() * FEATURED_ROUTE_GROUPS.length)]
+      const places = routeIds
+        .map((id) => TRAVEL_PLACES.find((place) => place.id === id))
+        .filter(Boolean)
+      const visitMinutes = places.reduce((sum, place) => sum + place.visitMinutes, 0)
+      const walkingMinutes = (places.length - 1) * (14 + Math.floor(Math.random() * 7))
+
+      return {
+        places,
+        totalMinutes: visitMinutes + walkingMinutes
+      }
+    },
+    getRouteNumber(index) {
+      return String(index + 1).padStart(2, '0')
+    },
+    shouldReduceMotion() {
+      return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    },
+    animateIntroPanel() {
+      if (this.shouldReduceMotion()) {
+        return
+      }
+
+      this.motionControls = [
+        animate(
+          '.c-intro__shell',
+          { opacity: [0, 1], y: [18, 0] },
+          { duration: 0.54, easing: 'ease-out' }
+        ),
+        animate(
+          '.c-intro__content > *, .c-intro__routeCard',
+          { opacity: [0, 1], y: [16, 0] },
+          { duration: 0.46, delay: stagger(0.055), easing: 'ease-out' }
+        )
+      ]
+    },
+    animateStartButton(event) {
+      if (this.shouldReduceMotion() || !event.currentTarget) {
+        return
+      }
+
+      animate(
+        event.currentTarget,
+        { scale: [1, 1.025, 1], boxShadow: ['0 18px 46px rgba(120, 243, 211, 0.2)', '0 20px 58px rgba(120, 243, 211, 0.34)', '0 18px 46px rgba(120, 243, 211, 0.2)'] },
+        { duration: 0.38, easing: 'ease-out' }
+      )
     },
     getRandomNumber(max, min) {
       return Math.floor(Math.random() * max) + min
@@ -274,7 +402,7 @@ export default {
   &__shell {
     position: relative;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 230px;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 330px);
     align-items: end;
     gap: 34px;
     width: min(1180px, calc(100vw - 48px));
@@ -283,10 +411,13 @@ export default {
     border: 1px solid rgba(248, 240, 223, 0.18);
     border-radius: 34px;
     background:
-      linear-gradient(110deg, rgba(5, 7, 8, 0.48), rgba(5, 7, 8, 0.18)),
-      radial-gradient(circle at 88% 12%, rgba(255, 139, 74, 0.2), transparent 32%);
-    box-shadow: 0 30px 120px rgba(0, 0, 0, 0.42);
-    backdrop-filter: blur(4px);
+      linear-gradient(118deg, rgba(5, 7, 8, 0.62), rgba(5, 7, 8, 0.24)),
+      radial-gradient(circle at 88% 12%, rgba(255, 139, 74, 0.24), transparent 32%),
+      radial-gradient(circle at 6% 96%, rgba(120, 243, 211, 0.18), transparent 30%);
+    box-shadow:
+      0 30px 120px rgba(0, 0, 0, 0.42),
+      inset 0 1px 0 rgba(255, 255, 255, 0.13);
+    backdrop-filter: blur(10px) saturate(1.08);
 
     &::before {
       content: '';
@@ -295,6 +426,18 @@ export default {
       border: 1px solid rgba(248, 240, 223, 0.1);
       border-radius: 26px;
       pointer-events: none;
+    }
+
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.12), transparent 28%),
+        linear-gradient(315deg, rgba(120, 243, 211, 0.08), transparent 34%);
+      mix-blend-mode: screen;
     }
   }
 
@@ -331,7 +474,7 @@ export default {
   &__content {
     position: relative;
     z-index: 1;
-    max-width: 820px;
+    max-width: 760px;
     padding-top: 110px;
   }
 
@@ -461,36 +604,161 @@ export default {
     line-height: 1.4;
   }
 
+  &__projectStats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 150px));
+    gap: 10px;
+    max-width: 500px;
+    margin: 20px 0 0;
+  }
+
+  &__projectStat {
+    display: grid;
+    gap: 3px;
+    min-height: 72px;
+    margin: 0;
+    padding: 12px 14px;
+    border: 1px solid rgba(248, 240, 223, 0.15);
+    border-radius: 18px;
+    background: rgba(5, 7, 8, 0.38);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  &__projectValue {
+    color: var(--c-intro-neon);
+    font-size: 25px;
+    line-height: 1;
+  }
+
+  &__projectLabel {
+    margin: 0;
+    color: rgba(248, 240, 223, 0.66);
+    font-family: Arial, sans-serif;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+
   &__routeCard {
     position: relative;
     z-index: 1;
     display: grid;
-    gap: 10px;
+    gap: 18px;
     align-self: center;
-    padding: 20px;
-    border: 1px solid rgba(248, 240, 223, 0.16);
-    border-radius: 24px;
-    background: rgba(5, 7, 8, 0.5);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    padding: 22px;
+    border: 1px solid rgba(248, 240, 223, 0.22);
+    border-radius: 28px;
+    background:
+      linear-gradient(155deg, rgba(248, 240, 223, 0.12), rgba(5, 7, 8, 0.42)),
+      rgba(5, 7, 8, 0.54);
+    box-shadow:
+      0 20px 54px rgba(0, 0, 0, 0.24),
+      inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+
+  &__routeHead {
+    display: grid;
+    gap: 8px;
+  }
+
+  &__routeKicker {
+    color: var(--c-intro-neon);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  &__routeTitle {
+    margin: 0;
+    font-family: 'MerriweatherTravel', Georgia, serif;
+    font-size: 26px;
+    line-height: 1.08;
+  }
+
+  &__routeList {
+    display: grid;
+    gap: 14px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  &__routeItem {
+    position: relative;
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 12px;
+
+    &:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      top: 29px;
+      bottom: -13px;
+      left: 16px;
+      width: 1px;
+      background: linear-gradient(var(--c-intro-neon), rgba(248, 240, 223, 0.12));
+    }
   }
 
   &__routeNumber {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 28px;
+    border-radius: 999px;
+    background: rgba(120, 243, 211, 0.12);
     color: var(--c-intro-neon);
     font-size: 12px;
     letter-spacing: 0.18em;
   }
 
+  &__routePlace {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
   &__routeText {
+    overflow: hidden;
     font-family: Arial, sans-serif;
     font-size: 14px;
     font-weight: 700;
+    line-height: 1.25;
+    text-overflow: ellipsis;
   }
 
-  &__routeLine {
-    width: 1px;
-    height: 34px;
-    margin-left: 8px;
-    background: linear-gradient(var(--c-intro-neon), rgba(248, 240, 223, 0.18));
+  &__routeMeta {
+    overflow: hidden;
+    color: rgba(248, 240, 223, 0.56);
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__routeSummary {
+    display: grid;
+    gap: 4px;
+    padding: 14px;
+    border: 1px solid rgba(255, 139, 74, 0.24);
+    border-radius: 18px;
+    background: rgba(255, 139, 74, 0.1);
+  }
+
+  &__routeTime {
+    color: var(--c-intro-ember);
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  &__routeSummaryText {
+    color: rgba(248, 240, 223, 0.62);
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.3;
   }
 
   &__rain {
@@ -521,12 +789,7 @@ export default {
     }
 
     &__routeCard {
-      grid-template-columns: auto 1fr;
       align-self: stretch;
-    }
-
-    &__routeLine {
-      display: none;
     }
   }
 }

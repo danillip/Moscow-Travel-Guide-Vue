@@ -56,7 +56,7 @@
             class="c-map-page__button"
             :class="button.className"
             type="button"
-            @click="() => runAction(button.method)"
+            @click="(event) => runAction(button.method, event)"
           >
             <span class="c-map-page__buttonIcon">{{ button.icon }}</span>
             <span class="c-map-page__buttonText">{{ button.text }}</span>
@@ -65,12 +65,12 @@
       </div>
 
       <div class="c-map-page__toolGrid">
-        <button class="c-map-page__toolBtn c-map-page__toolBtn--catalog" type="button" @click="() => toggleCatalog()">
+        <button class="c-map-page__toolBtn c-map-page__toolBtn--catalog" type="button" @click="(event) => toggleCatalog(event)">
           <span class="c-map-page__toolIcon">+</span>
           <span class="c-map-page__toolText">Каталог мест</span>
         </button>
 
-        <button class="c-map-page__toolBtn" type="button" @click="() => toggleInfo()">
+        <button class="c-map-page__toolBtn" type="button" @click="(event) => toggleInfo(event)">
           <span class="c-map-page__toolIcon">i</span>
           <span class="c-map-page__toolText">Подсказки</span>
         </button>
@@ -79,13 +79,13 @@
           class="c-map-page__toolBtn"
           :disabled="!alternativeRoutes.length"
           type="button"
-          @click="() => toggleSavedRoutes()"
+          @click="(event) => toggleSavedRoutes(event)"
         >
           <span class="c-map-page__toolIcon">{{ alternativeRoutes.length }}</span>
           <span class="c-map-page__toolText">Планы</span>
         </button>
 
-        <button class="c-map-page__toolBtn" type="button" @click="() => toggleSettings()">
+        <button class="c-map-page__toolBtn" type="button" @click="(event) => toggleSettings(event)">
           <span class="c-map-page__toolIcon">&#9881;</span>
           <span class="c-map-page__toolText">Настройки</span>
         </button>
@@ -104,7 +104,10 @@
 
     <section class="c-map-page__mapWrap">
       <div class="c-map-page__mapFrame">
-        <div v-if="isMapLoading" class="c-map-page__loader">Карта загружается...</div>
+        <div v-if="isMapLoading" class="c-map-page__loader">
+          <span class="c-map-page__loaderDot"></span>
+          <span class="c-map-page__loaderText">Карта загружается...</span>
+        </div>
         <div v-if="mapError" class="c-map-page__error">{{ mapError }}</div>
         <div class="c-map-page__mapOverlay">
           <form class="c-map-page__search" @submit.prevent="() => searchMapLocation()">
@@ -119,6 +122,34 @@
           <span class="c-map-page__mapHint">Добавляй достопримечательности прямо на карте</span>
         </div>
         <div ref="map" class="c-map-page__map"></div>
+      </div>
+    </section>
+
+    <section v-if="focusedPlace" ref="placePreview" class="c-map-page__placePreview">
+      <header class="c-map-page__placePreviewHead">
+        <div>
+          <span class="c-map-page__placePreviewKicker">точка на карте</span>
+          <h2 class="c-map-page__placePreviewTitle">{{ focusedPlace.title }}</h2>
+        </div>
+        <button class="c-map-page__placePreviewClose" type="button" @click="() => clearFocusedPlace()">&times;</button>
+      </header>
+
+      <div class="c-map-page__placePreviewMeta">
+        <span class="c-map-page__placePreviewChip">{{ focusedPlace.category }}</span>
+        <span class="c-map-page__placePreviewChip">{{ focusedPlace.visitMinutes }} мин</span>
+        <span class="c-map-page__placePreviewChip c-map-page__placePreviewChip--warm">{{ focusedPlace.ticketStatus }}</span>
+      </div>
+
+      <p class="c-map-page__placePreviewText">{{ focusedPlace.description }}</p>
+      <p class="c-map-page__placePreviewHint">{{ focusedPlace.highlight }}</p>
+
+      <div class="c-map-page__placePreviewActions">
+        <button class="c-map-page__placePreviewBtn" type="button" @click="() => togglePlace(focusedPlace)">
+          {{ isPlaceSelected(focusedPlace) ? 'Убрать из маршрута' : 'Добавить в маршрут' }}
+        </button>
+        <button class="c-map-page__placePreviewBtn c-map-page__placePreviewBtn--ghost" type="button" @click="() => clearFocusedPlace()">
+          Скрыть метку
+        </button>
       </div>
     </section>
 
@@ -294,6 +325,8 @@
 </template>
 
 <script>
+import { animate, stagger } from 'motion'
+import { markRaw } from 'vue'
 import { mapActions, mapGetters } from 'vuex'
 import { ROUTE_DEFAULTS } from '@/constants/travelConfig.js'
 import { TRAVEL_MARKS, TRAVEL_PLACES } from '@/constants/travelMarks.js'
@@ -314,6 +347,10 @@ export default {
       isMapLoading: true,
       mapError: '',
       mapErrorTimer: null,
+      mapMotionControls: [],
+      routeArrowObjects: [],
+      routeArrowRafId: null,
+      routeArrowStartedAt: 0,
       searchQuery: '',
       places: TRAVEL_PLACES,
       activeCategory: 'Все',
@@ -486,10 +523,14 @@ export default {
       }
 
       return this.places.filter((place) => place.category === this.activeCategory)
+    },
+    focusedPlace() {
+      return this.places.find((place) => place.id === this.focusedPlaceId) || null
     }
   },
 
   mounted() {
+    this.$nextTick(() => this.animateMapUi())
     this.loadYandexApi()
       .then(() => this.initMap())
       .catch(() => {
@@ -498,6 +539,12 @@ export default {
       })
   },
   beforeUnmount() {
+    this.mapMotionControls.forEach((control) => {
+      if (control && typeof control.stop === 'function') {
+        control.stop()
+      }
+    })
+    this.clearRouteArrows()
     window.clearTimeout(this.mapErrorTimer)
     window.removeEventListener('mousemove', this.onCatalogDrag)
     window.removeEventListener('mouseup', this.stopCatalogDrag)
@@ -525,8 +572,310 @@ export default {
       'setSelectedRouteIndex',
       'resetTravel'
     ]),
-    runAction(methodName) {
+    runAction(methodName, event = null) {
+      this.animateActionFeedback(event)
       this[methodName]()
+    },
+    shouldReduceMotion() {
+      return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    },
+    animateMapUi() {
+      if (this.shouldReduceMotion()) {
+        return
+      }
+
+      this.mapMotionControls = [
+        animate(
+          '.c-map-page__panel > *',
+          { opacity: [0, 1], x: [-18, 0], filter: ['blur(10px)', 'blur(0px)'] },
+          { duration: 0.46, delay: stagger(0.045), easing: 'ease-out' }
+        ),
+        animate(
+          '.c-map-page__mapOverlay',
+          { opacity: [0, 1], y: [-16, 0], scale: [0.98, 1] },
+          { duration: 0.42, delay: 0.22, easing: 'ease-out' }
+        )
+      ]
+    },
+    animateFloatingWindow(refName) {
+      if (this.shouldReduceMotion() || !this.$refs[refName]) {
+        return
+      }
+
+      animate(
+        this.$refs[refName],
+        { opacity: [0, 1], y: [18, 0] },
+        { duration: 0.28, easing: 'ease-out' }
+      )
+    },
+    animateActionFeedback(event) {
+      if (this.shouldReduceMotion()) {
+        return
+      }
+
+      if (event && event.currentTarget) {
+        animate(
+          event.currentTarget,
+          { scale: [1, 0.97, 1.02, 1], boxShadow: ['0 0 0 rgba(109, 242, 205, 0)', '0 0 0 4px rgba(109, 242, 205, 0.16)', '0 18px 44px rgba(109, 242, 205, 0.18)', '0 0 0 rgba(109, 242, 205, 0)'] },
+          { duration: 0.42, easing: 'ease-out' }
+        )
+      }
+
+    },
+    clearRouteArrows() {
+      if (this.routeArrowRafId) {
+        window.cancelAnimationFrame(this.routeArrowRafId)
+        this.routeArrowRafId = null
+      }
+
+      if (this._map) {
+        this.routeArrowObjects.forEach((arrow) => {
+          this._map.geoObjects.remove(arrow)
+        })
+      }
+
+      this.routeArrowObjects = []
+      this.routeArrowStartedAt = 0
+    },
+    normalizeRoutePoint(point) {
+      if (!Array.isArray(point) || point.length < 2) {
+        return null
+      }
+
+      const latitude = Number(point[0])
+      const longitude = Number(point[1])
+
+      if (Number.isNaN(latitude) || Number.isNaN(longitude)) {
+        return null
+      }
+
+      return [latitude, longitude]
+    },
+    appendRouteCoordinates(target, coordinates) {
+      if (!Array.isArray(coordinates)) {
+        return
+      }
+
+      const point = this.normalizeRoutePoint(coordinates)
+
+      if (point) {
+        target.push(point)
+        return
+      }
+
+      coordinates.forEach((item) => this.appendRouteCoordinates(target, item))
+    },
+    eachYandexCollection(collection, callback) {
+      if (!collection) {
+        return
+      }
+
+      if (typeof collection.each === 'function') {
+        collection.each(callback)
+        return
+      }
+
+      if (typeof collection.getLength === 'function' && typeof collection.get === 'function') {
+        for (let index = 0; index < collection.getLength(); index += 1) {
+          callback(collection.get(index))
+        }
+      }
+    },
+    collectYandexRoutePath(routePart, target = []) {
+      if (!routePart) {
+        return target
+      }
+
+      if (routePart.geometry && typeof routePart.geometry.getCoordinates === 'function') {
+        this.appendRouteCoordinates(target, routePart.geometry.getCoordinates())
+      }
+
+      if (typeof routePart.getActiveRoute === 'function') {
+        this.collectYandexRoutePath(routePart.getActiveRoute(), target)
+      }
+
+      if (typeof routePart.getPaths === 'function') {
+        this.eachYandexCollection(routePart.getPaths(), (path) => this.collectYandexRoutePath(path, target))
+      }
+
+      if (typeof routePart.getSegments === 'function') {
+        this.eachYandexCollection(routePart.getSegments(), (segment) => this.collectYandexRoutePath(segment, target))
+      }
+
+      return target
+    },
+    getYandexRoutePath(route, fallbackPoints) {
+      const routePath = []
+
+      try {
+        this.collectYandexRoutePath(route, routePath)
+      } catch (error) {
+        console.warn('Yandex route path extraction failed', error)
+      }
+
+      return routePath.length >= 2 ? routePath : fallbackPoints
+    },
+    getRouteSegmentDistance(startPoint, endPoint) {
+      const averageLatitude = ((startPoint[0] + endPoint[0]) / 2) * Math.PI / 180
+      const latitudeDelta = endPoint[0] - startPoint[0]
+      const longitudeDelta = (endPoint[1] - startPoint[1]) * Math.cos(averageLatitude)
+
+      return Math.sqrt((latitudeDelta * latitudeDelta) + (longitudeDelta * longitudeDelta))
+    },
+    getRouteProgressPath(points, progress) {
+      const normalizedPoints = points.map((point) => this.normalizeRoutePoint(point)).filter(Boolean)
+
+      if (normalizedPoints.length < 2) {
+        return null
+      }
+
+      const segments = []
+      let totalDistance = 0
+
+      for (let index = 0; index < normalizedPoints.length - 1; index += 1) {
+        const startPoint = normalizedPoints[index]
+        const endPoint = normalizedPoints[index + 1]
+        const distance = this.getRouteSegmentDistance(startPoint, endPoint)
+
+        if (distance > 0) {
+          totalDistance += distance
+          segments.push({
+            startPoint,
+            endPoint,
+            distance
+          })
+        }
+      }
+
+      if (!segments.length || totalDistance <= 0) {
+        return null
+      }
+
+      const safeProgress = Math.min(1, Math.max(0, progress))
+      let targetDistance = totalDistance * safeProgress
+      const coordinates = [segments[0].startPoint]
+
+      for (let index = 0; index < segments.length; index += 1) {
+        const segment = segments[index]
+
+        if (targetDistance > segment.distance) {
+          coordinates.push(segment.endPoint)
+          targetDistance -= segment.distance
+          continue
+        }
+
+        const segmentProgress = targetDistance / segment.distance
+        const latitude = segment.startPoint[0] + ((segment.endPoint[0] - segment.startPoint[0]) * segmentProgress)
+        const longitude = segment.startPoint[1] + ((segment.endPoint[1] - segment.startPoint[1]) * segmentProgress)
+        const averageLatitude = ((segment.startPoint[0] + segment.endPoint[0]) / 2) * Math.PI / 180
+        const projectedLongitudeDelta = (segment.endPoint[1] - segment.startPoint[1]) * Math.cos(averageLatitude)
+        const projectedLatitudeDelta = segment.endPoint[0] - segment.startPoint[0]
+        const rotation = Math.atan2(-projectedLatitudeDelta, projectedLongitudeDelta) * 180 / Math.PI
+        const headCoordinates = [latitude, longitude]
+
+        coordinates.push(headCoordinates)
+
+        return {
+          coordinates: coordinates.length > 1 ? coordinates : [headCoordinates, headCoordinates],
+          head: {
+            coordinates: headCoordinates,
+            rotation
+          }
+        }
+      }
+
+      const lastSegment = segments[segments.length - 1]
+
+      return {
+        coordinates: normalizedPoints,
+        head: {
+          coordinates: lastSegment.endPoint,
+          rotation: 0
+        }
+      }
+    },
+    getRouteArrowLayout() {
+      if (this._routeArrowLayout) {
+        return this._routeArrowLayout
+      }
+
+      this._routeArrowLayout = window.ymaps.templateLayoutFactory.createClass(
+        '<div class="c-map-page__routeArrow" style="--route-arrow-color: $[properties.color]; transform: translate(-50%, -50%) rotate($[properties.rotation]deg);">➤</div>'
+      )
+
+      return this._routeArrowLayout
+    },
+    updateRouteFill(points, timestamp) {
+      if (!this.routeArrowObjects.length) {
+        return
+      }
+
+      if (!this.routeArrowStartedAt) {
+        this.routeArrowStartedAt = timestamp
+      }
+
+      const fillDuration = 3600
+      const holdDuration = 520
+      const cycleDuration = fillDuration + holdDuration
+      const cycleTime = (timestamp - this.routeArrowStartedAt) % cycleDuration
+      const progress = cycleTime > fillDuration ? 1 : cycleTime / fillDuration
+      const fill = this.getRouteProgressPath(points, progress)
+
+      if (fill) {
+        const [progressLine, routeHead] = this.routeArrowObjects
+        progressLine.geometry.setCoordinates(fill.coordinates)
+        routeHead.geometry.setCoordinates(fill.head.coordinates)
+        routeHead.properties.set('rotation', fill.head.rotation)
+      }
+
+      this.routeArrowRafId = window.requestAnimationFrame((nextTimestamp) => this.updateRouteFill(points, nextTimestamp))
+    },
+    startRouteFill(points, color) {
+      this.clearRouteArrows()
+
+      if (this.shouldReduceMotion() || !this._map || !window.ymaps || points.length < 2) {
+        return
+      }
+
+      const initialFill = this.getRouteProgressPath(points, 0.001)
+
+      if (!initialFill) {
+        return
+      }
+
+      const progressLine = new window.ymaps.Polyline(initialFill.coordinates, {}, {
+        strokeColor: color,
+        strokeWidth: 8,
+        strokeOpacity: 0.94,
+        zIndex: 450
+      })
+      const layout = this.getRouteArrowLayout()
+      const routeHead = new window.ymaps.Placemark(initialFill.head.coordinates, {
+        color,
+        rotation: initialFill.head.rotation
+      }, {
+        iconLayout: layout,
+        iconShape: {
+          type: 'Rectangle',
+          coordinates: [[-18, -18], [18, 18]]
+        },
+        zIndex: 470,
+        hasBalloon: false,
+        hasHint: false
+      })
+
+      this._map.geoObjects.add(progressLine)
+      this._map.geoObjects.add(routeHead)
+      this.routeArrowObjects = [markRaw(progressLine), markRaw(routeHead)]
+      this.routeArrowRafId = window.requestAnimationFrame((timestamp) => this.updateRouteFill(points, timestamp))
+    },
+    clearFocusedPlace() {
+      if (this._focusedMarker && this._map) {
+        this._map.geoObjects.remove(this._focusedMarker)
+      }
+
+      this._focusedMarker = null
+      this.focusedPlaceId = ''
     },
     setActiveCategory(category) {
       this.activeCategory = category
@@ -556,9 +905,15 @@ export default {
         return
       }
 
+      if (this.focusedPlaceId === place.id) {
+        this.clearFocusedPlace()
+        return
+      }
+
       this.focusedPlaceId = place.id
       this._map.setCenter(place.coordinates, 16, { duration: 300 })
       this.renderFocusedPlace()
+      this.$nextTick(() => this.animateFloatingWindow('placePreview'))
     },
     showTicketStub(place) {
       this.setRouteInfo({
@@ -568,7 +923,8 @@ export default {
         message: `Билеты для «${place.title}» пока в режиме заглушки. Позже сюда можно подключить афиши, экскурсии и бронирование.`
       })
     },
-    toggleInfo() {
+    toggleInfo(event = null) {
+      this.animateActionFeedback(event)
       this.sideOpen = !this.sideOpen
       this.$nextTick(() => {
         this.infoPosition = this.getLimitedPanelPosition(
@@ -578,6 +934,7 @@ export default {
           380,
           260
         )
+        this.animateFloatingWindow('infoWindow')
       })
     },
     closeInfo() {
@@ -614,7 +971,8 @@ export default {
       window.removeEventListener('mousemove', this.onInfoDrag)
       window.removeEventListener('mouseup', this.stopInfoDrag)
     },
-    toggleCatalog() {
+    toggleCatalog(event = null) {
+      this.animateActionFeedback(event)
       this.catalogOpen = !this.catalogOpen
       this.$nextTick(() => {
         this.catalogPosition = this.getLimitedPanelPosition(
@@ -624,6 +982,7 @@ export default {
           720,
           620
         )
+        this.animateFloatingWindow('catalogWindow')
       })
     },
     closeCatalog() {
@@ -660,7 +1019,8 @@ export default {
       window.removeEventListener('mousemove', this.onCatalogDrag)
       window.removeEventListener('mouseup', this.stopCatalogDrag)
     },
-    toggleSettings() {
+    toggleSettings(event = null) {
+      this.animateActionFeedback(event)
       this.settingsOpen = !this.settingsOpen
       this.$nextTick(() => {
         this.settingsPosition = this.getLimitedPanelPosition(
@@ -670,6 +1030,7 @@ export default {
           360,
           390
         )
+        this.animateFloatingWindow('settingsWindow')
       })
     },
     closeSettings() {
@@ -709,10 +1070,12 @@ export default {
       window.removeEventListener('mousemove', this.onSettingsDrag)
       window.removeEventListener('mouseup', this.stopSettingsDrag)
     },
-    toggleSavedRoutes() {
+    toggleSavedRoutes(event = null) {
+      this.animateActionFeedback(event)
       this.savedRoutesOpen = !this.savedRoutesOpen
       this.$nextTick(() => {
         this.savedRoutesPosition = this.getLimitedSavedRoutesPosition(this.savedRoutesPosition.x, this.savedRoutesPosition.y)
+        this.animateFloatingWindow('savedRoutesWindow')
       })
     },
     closeSavedRoutes() {
@@ -866,6 +1229,7 @@ export default {
 
           const coords = item.geometry.getCoordinates()
           this.clearMapError()
+          this.clearFocusedPlace()
           this._map.setCenter(coords, 15, { duration: 300 })
           this.addLandmark(coords)
           this.refreshMapObjects()
@@ -876,6 +1240,7 @@ export default {
     },
     handleMapClick(event) {
       const coords = event.get('coords')
+      this.clearFocusedPlace()
       this.addLandmark(coords)
       this.refreshMapObjects()
     },
@@ -902,6 +1267,7 @@ export default {
         return
       }
 
+      this.clearRouteArrows()
       this._map.geoObjects.removeAll()
       this.renderFocusedPlace()
       this.renderPlacemarks(points)
@@ -909,38 +1275,39 @@ export default {
     renderFocusedPlace() {
       const place = this.places.find((item) => item.id === this.focusedPlaceId)
 
+      if (this._focusedMarker) {
+        this._map.geoObjects.remove(this._focusedMarker)
+        this._focusedMarker = null
+      }
+
       if (!place || !window.ymaps) {
         return
       }
 
-      if (this._focusedMarker) {
-        this._map.geoObjects.remove(this._focusedMarker)
+      if (this.isPlaceSelected(place)) {
+        return
       }
 
       const marker = new window.ymaps.Placemark(place.coordinates, {
-        iconContent: '●',
-        balloonContentHeader: place.title,
-        balloonContentBody: `${place.category} · ${place.visitMinutes} мин<br>${place.description}`,
-        balloonContentFooter: place.highlight
+        iconContent: 'i',
+        hintContent: place.title
       }, {
         preset: 'islands#redStretchyIcon'
       })
 
       this._map.geoObjects.add(marker)
       this._focusedMarker = marker
-      window.setTimeout(() => marker.balloon.open(), 120)
     },
     renderPlacemarks(points) {
       points.forEach((coords, index) => {
         const place = this.getPlaceByCoords(coords)
-        const isFocused = place && place.id === this.focusedPlaceId
         const placemark = new window.ymaps.Placemark(coords, {
           iconContent: String(index + 1),
           balloonContentHeader: place ? place.title : `Точка ${index + 1}`,
           balloonContentBody: place ? `${place.description}<br><strong>${place.ticketStatus}</strong>` : 'Пользовательская точка маршрута',
           balloonContentFooter: place ? place.highlight : 'Можно убрать правой кнопкой мыши'
         }, {
-          preset: isFocused ? 'islands#redStretchyIcon' : place ? 'islands#greenStretchyIcon' : 'islands#blueStretchyIcon'
+          preset: place ? 'islands#greenStretchyIcon' : 'islands#blueStretchyIcon'
         })
 
         placemark.events.add('contextmenu', (event) => {
@@ -956,6 +1323,7 @@ export default {
       return points.map((point) => [Number(point[0]), Number(point[1])])
     },
     buildRoute(points, color) {
+      this.clearRouteArrows()
       this._map.geoObjects.removeAll()
       const yandexPoints = this.getYandexPoints(points)
 
@@ -983,6 +1351,7 @@ export default {
         this._map.geoObjects.add(route)
         this.styleYandexRoute(route, color)
         this.renderPlacemarks(points)
+        this.startRouteFill(this.getYandexRoutePath(route, points), color)
 
         if (typeof route.getBounds === 'function') {
           this._map.setBounds(route.getBounds(), {
@@ -1022,6 +1391,7 @@ export default {
 
         this._map.geoObjects.add(polyline)
         this.renderPlacemarks(points)
+        this.startRouteFill(roadRoute.points, color)
         this._map.setBounds(polyline.geometry.getBounds(), {
           checkZoomRange: true,
           zoomMargin: 40
@@ -1042,6 +1412,7 @@ export default {
 
       this._map.geoObjects.add(polyline)
       this.renderPlacemarks(yandexPoints)
+      this.startRouteFill(yandexPoints, color)
       this._map.setBounds(polyline.geometry.getBounds(), {
         checkZoomRange: true,
         zoomMargin: 40
@@ -1217,8 +1588,8 @@ export default {
       })
     },
     resetMap() {
-      this.focusedPlaceId = ''
-      this._focusedMarker = null
+      this.clearFocusedPlace()
+      this.clearRouteArrows()
       this.resetTravel()
       this.refreshMapObjects()
     }
@@ -1261,6 +1632,22 @@ export default {
       radial-gradient(circle at 30% 0%, rgba(109, 242, 205, 0.16), transparent 34%);
     box-shadow: 24px 0 80px rgba(0, 0, 0, 0.34);
     backdrop-filter: blur(18px);
+
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      opacity: 0.72;
+      pointer-events: none;
+      background:
+        linear-gradient(120deg, rgba(109, 242, 205, 0.13), transparent 34%),
+        radial-gradient(circle at 18% 82%, rgba(47, 128, 255, 0.16), transparent 28%);
+    }
+
+    > * {
+      position: relative;
+      z-index: 1;
+    }
   }
 
   &__header {
@@ -1486,10 +1873,10 @@ export default {
     border: 1px solid rgba(247, 238, 220, 0.22);
     border-radius: 24px;
     background:
-      linear-gradient(145deg, rgba(8, 16, 14, 0.9), rgba(8, 16, 14, 0.72)),
+      linear-gradient(145deg, rgba(8, 16, 14, 0.96), rgba(8, 16, 14, 0.88)),
       radial-gradient(circle at 18% 0%, rgba(255, 177, 94, 0.18), transparent 40%);
     box-shadow: 0 30px 90px rgba(0, 0, 0, 0.44);
-    backdrop-filter: blur(18px);
+    backdrop-filter: none;
     animation: c-map-panel-in 0.24s ease;
   }
 
@@ -1626,6 +2013,7 @@ export default {
     border-radius: 16px;
     overflow: hidden;
     text-align: left;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 
     &::before {
       content: '';
@@ -1695,6 +2083,7 @@ export default {
     max-height: 118px;
     padding: 12px;
     overflow: auto;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 
     &--success {
       border-color: rgba(109, 242, 205, 0.42);
@@ -1757,10 +2146,10 @@ export default {
     border: 1px solid rgba(247, 238, 220, 0.22);
     border-radius: 26px;
     background:
-      linear-gradient(145deg, rgba(8, 16, 14, 0.86), rgba(8, 16, 14, 0.66)),
+      linear-gradient(145deg, rgba(8, 16, 14, 0.96), rgba(8, 16, 14, 0.88)),
       radial-gradient(circle at 12% 0%, rgba(109, 242, 205, 0.2), transparent 40%);
-    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.44);
-    backdrop-filter: blur(18px);
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.44), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    backdrop-filter: none;
     animation: c-map-panel-in 0.24s ease;
   }
 
@@ -1937,10 +2326,10 @@ export default {
     border: 1px solid rgba(247, 238, 220, 0.22);
     border-radius: 28px;
     background:
-      linear-gradient(145deg, rgba(8, 16, 14, 0.84), rgba(8, 16, 14, 0.62)),
+      linear-gradient(145deg, rgba(8, 16, 14, 0.96), rgba(8, 16, 14, 0.88)),
       radial-gradient(circle at 12% 0%, rgba(109, 242, 205, 0.22), transparent 36%);
-    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.44);
-    backdrop-filter: blur(18px);
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.44), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    backdrop-filter: none;
     animation: c-map-panel-in 0.24s ease;
   }
 
@@ -2043,10 +2432,10 @@ export default {
     border: 1px solid rgba(247, 238, 220, 0.22);
     border-radius: 28px;
     background:
-      linear-gradient(145deg, rgba(8, 16, 14, 0.86), rgba(8, 16, 14, 0.68)),
+      linear-gradient(145deg, rgba(8, 16, 14, 0.96), rgba(8, 16, 14, 0.88)),
       radial-gradient(circle at 12% 0%, rgba(109, 242, 205, 0.2), transparent 38%);
-    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.44);
-    backdrop-filter: blur(18px);
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.44), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    backdrop-filter: none;
     animation: c-map-panel-in 0.24s ease;
   }
 
@@ -2239,6 +2628,140 @@ export default {
     }
   }
 
+  &__placePreview {
+    position: fixed;
+    top: 92px;
+    right: 24px;
+    z-index: 23;
+    display: grid;
+    gap: 12px;
+    width: min(360px, calc(100vw - 48px));
+    padding: 16px;
+    border: 1px solid rgba(247, 238, 220, 0.22);
+    border-radius: 24px;
+    background:
+      linear-gradient(145deg, rgba(8, 16, 14, 0.96), rgba(8, 16, 14, 0.88)),
+      radial-gradient(circle at 10% 0%, rgba(109, 242, 205, 0.22), transparent 36%);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    animation: c-map-panel-in 0.22s ease;
+  }
+
+  &__placePreviewHead {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  &__placePreviewKicker {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--c-map-accent);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  &__placePreviewTitle {
+    margin: 0;
+    color: var(--c-map-text);
+    font-family: Georgia, serif;
+    font-size: 24px;
+    line-height: 1;
+  }
+
+  &__placePreviewClose {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    border: 1px solid rgba(247, 238, 220, 0.18);
+    border-radius: 50%;
+    background: rgba(247, 238, 220, 0.1);
+    color: var(--c-map-text);
+    cursor: pointer;
+    font-size: 22px;
+    line-height: 1;
+    transition: all 0.22s ease;
+
+    &:hover {
+      border-color: rgba(255, 112, 112, 0.52);
+      background: rgba(255, 112, 112, 0.18);
+      transform: rotate(90deg);
+    }
+  }
+
+  &__placePreviewMeta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  &__placePreviewChip {
+    padding: 6px 9px;
+    border-radius: 999px;
+    background: rgba(109, 242, 205, 0.12);
+    color: var(--c-map-accent);
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1;
+
+    &--warm {
+      background: rgba(255, 177, 94, 0.12);
+      color: var(--c-map-warm);
+    }
+  }
+
+  &__placePreviewText,
+  &__placePreviewHint {
+    margin: 0;
+    color: var(--c-map-muted);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  &__placePreviewHint {
+    padding: 10px 12px;
+    border: 1px solid rgba(109, 242, 205, 0.2);
+    border-radius: 16px;
+    background: rgba(109, 242, 205, 0.08);
+    color: var(--c-map-accent);
+    font-weight: 800;
+  }
+
+  &__placePreviewActions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  &__placePreviewBtn {
+    min-height: 38px;
+    padding: 8px 10px;
+    border: 1px solid rgba(109, 242, 205, 0.36);
+    border-radius: 14px;
+    background: rgba(109, 242, 205, 0.14);
+    color: var(--c-map-text);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 900;
+    line-height: 1.15;
+    transition: all 0.22s ease;
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 28px rgba(109, 242, 205, 0.16);
+    }
+
+    &--ghost {
+      border-color: rgba(247, 238, 220, 0.16);
+      background: rgba(247, 238, 220, 0.08);
+      color: var(--c-map-muted);
+    }
+  }
+
   &__mapWrap {
     position: relative;
     min-width: 0;
@@ -2263,6 +2786,27 @@ export default {
     border-radius: 0;
   }
 
+  &__routeArrow {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--route-arrow-color);
+    font-size: 22px;
+    font-weight: 900;
+    line-height: 1;
+    pointer-events: none;
+    text-shadow:
+      0 1px 2px rgba(8, 16, 14, 0.9),
+      0 0 12px var(--route-arrow-color),
+      0 0 26px var(--route-arrow-color);
+    filter: drop-shadow(0 0 6px rgba(8, 16, 14, 0.82));
+    transform-origin: center;
+    animation: c-map-route-arrow-glow 0.82s ease-in-out infinite alternate;
+  }
+
   &__mapOverlay {
     position: absolute;
     top: 20px;
@@ -2280,6 +2824,7 @@ export default {
     color: #08100e;
     box-shadow: 0 12px 34px rgba(0, 0, 0, 0.18);
     pointer-events: auto;
+    backdrop-filter: blur(14px);
   }
 
 
@@ -2342,11 +2887,31 @@ export default {
   }
 
   &__loader {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
     left: 50%;
     right: auto;
     top: 24px;
+    z-index: 24;
     transform: translateX(-50%);
+    border: 1px solid rgba(109, 242, 205, 0.34);
     border-radius: 999px;
+    background: rgba(8, 16, 14, 0.94);
+    pointer-events: none;
+  }
+
+  &__loaderDot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--c-map-accent);
+    box-shadow: 0 0 18px rgba(109, 242, 205, 0.72);
+    animation: c-map-loader-pulse 0.9s ease-in-out infinite;
+  }
+
+  &__loaderText {
+    white-space: nowrap;
   }
 
   &__error {
@@ -2370,12 +2935,37 @@ export default {
 @keyframes c-map-panel-in {
   0% {
     opacity: 0;
-    transform: translateY(-10px) scale(0.98);
+    transform: translateY(-10px);
   }
 
   100% {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
+  }
+}
+
+@keyframes c-map-loader-pulse {
+  0%,
+  100% {
+    opacity: 0.42;
+    transform: scale(0.82);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes c-map-route-arrow-glow {
+  0% {
+    opacity: 0.78;
+    filter: drop-shadow(0 0 4px rgba(8, 16, 14, 0.82));
+  }
+
+  100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 9px var(--route-arrow-color));
   }
 }
 
@@ -2421,6 +3011,14 @@ export default {
       height: 70vh;
       min-height: 560px;
       padding: 0;
+    }
+
+    &__placePreview {
+      top: auto;
+      right: 14px;
+      bottom: 24px;
+      left: 14px;
+      width: auto;
     }
 
     &__mapOverlay {
