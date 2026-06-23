@@ -329,7 +329,8 @@ import { animate, stagger } from 'motion'
 import { markRaw } from 'vue'
 import { mapActions, mapGetters } from 'vuex'
 import { ROUTE_DEFAULTS } from '@/constants/travelConfig.js'
-import { TRAVEL_MARKS, TRAVEL_PLACES } from '@/constants/travelMarks.js'
+import { TRAVEL_PLACES } from '@/constants/travelMarks.js'
+import { fetchTravelPlaces } from '@/api/travelApi.js'
 import {
   createDijkstraRoute,
   createRotatedRoute,
@@ -531,6 +532,7 @@ export default {
 
   mounted() {
     this.$nextTick(() => this.animateMapUi())
+    this.loadTravelPlaces()
     this.loadYandexApi()
       .then(() => this.initMap())
       .catch(() => {
@@ -578,6 +580,23 @@ export default {
     },
     shouldReduceMotion() {
       return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    },
+    loadTravelPlaces() {
+      return fetchTravelPlaces()
+        .then((places) => {
+          if (!Array.isArray(places) || !places.length) {
+            return
+          }
+
+          this.places = places
+
+          if (this._map) {
+            this.refreshMapObjects()
+          }
+        })
+        .catch((error) => {
+          console.warn('Backend places loading failed, local catalog is used', error)
+        })
     },
     animateMapUi() {
       if (this.shouldReduceMotion()) {
@@ -1545,7 +1564,8 @@ export default {
         return
       }
 
-      const mark = findNearestUnusedMark(this.routePoints, TRAVEL_MARKS)
+      const travelMarks = this.places.map((place) => place.coordinates)
+      const mark = findNearestUnusedMark(this.routePoints, travelMarks)
 
       if (!mark) {
         this.setRouteInfo({
