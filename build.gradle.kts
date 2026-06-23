@@ -1,29 +1,33 @@
+
 plugins {
-    kotlin("jvm") version "2.3.21"
-    application
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.ktor)
+    id("idea")
 }
 
-group = "org.example"
-version = "1.0-SNAPSHOT"
+group = "com.example"
+version = "0.0.1"
+
+application {
+    mainClass = "io.ktor.server.netty.EngineMain"
+}
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    testImplementation(kotlin("test"))
-    implementation("io.ktor:ktor-server-core:3.0.0")
-    implementation("io.ktor:ktor-server-netty:3.0.0")
+    implementation(libs.ktor.server.core)
+    implementation(libs.ktor.server.netty)
+    implementation(libs.logback.classic)
+    implementation(libs.ktor.server.config.yaml)
+    testImplementation(libs.ktor.server.test.host)
+    testImplementation(libs.kotlin.test.junit)
 }
 
-kotlin {
-    jvmToolchain(21)
-}
-
-application {
-    mainClass.set("org.example.MainKt")
-}
-
-tasks.test {
-    useJUnitPlatform()
+idea {
+    module {
+        isDownloadSources = true
+        isDownloadJavadoc = true
+    }
 }

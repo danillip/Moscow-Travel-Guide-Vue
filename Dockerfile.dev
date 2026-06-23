@@ -1,0 +1,14 @@
+FROM eclipse-temurin:21
+
+WORKDIR /app
+
+# Gradle Wrapper と設定だけ先にコピーして依存を解決
+COPY gradlew .
+COPY gradle gradle
+COPY build.gradle.kts settings.gradle.kts gradle.properties ./
+RUN chmod +x gradlew \
+    && ./gradlew --no-daemon --quiet build
+
+# バックグラウンドでソースファイルの変更をリアルタイムにビルド & development modeでアプリケーションを実行（ビルドファイルの変更を即時反映）
+# NOTE: ./gradlew runでも最初にビルドが走るので、コンテナ起動後にビルドのログが二つ出力される
+ENTRYPOINT ["bash", "-c", "./gradlew -t build & ./gradlew run -t -Dio.ktor.development=true"]
