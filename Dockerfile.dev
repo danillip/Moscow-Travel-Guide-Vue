@@ -2,17 +2,13 @@ FROM eclipse-temurin:21
 
 WORKDIR /app
 
-ARG UID=1000
-ARG GID=1000
-RUN groupadd -g ${GID} appuser && useradd -m -u ${UID} -g appuser appuser
-USER appuser
 
 # Gradle Wrapper と設定だけ先にコピーして依存を解決
 COPY gradlew .
 COPY gradle gradle
 COPY build.gradle.kts settings.gradle.kts gradle.properties ./
-RUN chmod +x gradlew \
-    && ./gradlew --no-daemon build
+#RUN chmod +x gradlew \
+#    && ./gradlew --no-daemon build
 
 # バックグラウンドでソースファイルの変更をリアルタイムにビルド & development modeでアプリケーションを実行（ビルドファイルの変更を即時反映）
 # NOTE: ./gradlew runでも最初にビルドが走るので、コンテナ起動後にビルドのログが二つ出力される
