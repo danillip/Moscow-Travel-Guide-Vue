@@ -1,4 +1,4 @@
-package com.example
+package com.example.routes
 
 import com.example.model.RefreshTokenRequest
 import com.example.model.SignInRequest
@@ -10,7 +10,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 
-fun Application.configureRouting() {
+fun Application.configureAuth() {
     routing {
         get("/") {
             call.respond(HttpStatusCode.OK, "MTG BACKEND")
