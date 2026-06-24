@@ -1,6 +1,7 @@
 services:
     vue:
         build: ./vue
+        entrypoint: sh -c "npm install && npm run devhost"
         ports:
             - "5173:5173"
         volumes:
