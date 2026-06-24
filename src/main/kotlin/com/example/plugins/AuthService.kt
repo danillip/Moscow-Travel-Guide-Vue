@@ -2,16 +2,23 @@ package com.example.plugins
 
 import com.example.model.AuthResponse
 import com.example.model.UserResponse
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.mindrot.jbcrypt.BCrypt
+import java.time.Duration
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.UUID
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object AuthService {
+@Singleton
+class AuthService @Inject constructor(private val jwtService: JwtService) {
+
     fun signUp(name: String, email: String, password: String): AuthResponse {
         val existing =
             transaction { Users.selectAll().where { Users.email eq email }.firstOrNull() }
@@ -51,11 +58,17 @@ object AuthService {
     }
 
     fun refresh(refreshToken: String): AuthResponse {
-        val decoded = JWTConfig.verifier().verify(refreshToken)
+        val decoded = jwtService.verifier().verify(refreshToken)
         val type = decoded.getClaim("type").asString()
         if (type != "refresh") throw IllegalArgumentException("Invalid token type")
 
         val userId = decoded.subject
+
+        val deleted = transaction {
+            RefreshTokens.deleteWhere { RefreshTokens.token eq refreshToken }
+        }
+        if (deleted == 0) throw IllegalArgumentException("Refresh token already used or expired")
+
         val row = transaction { Users.selectAll().where { Users.id eq userId }.firstOrNull() }
             ?: throw IllegalArgumentException("User not found")
 
@@ -73,8 +86,21 @@ object AuthService {
         email: String,
         createdAt: LocalDateTime
     ): AuthResponse {
-        val access = JWTConfig.makeAccessToken(id, email)
-        val refresh = JWTConfig.makeRefreshToken(id)
+        val access = jwtService.makeAccessToken(id, email)
+        val refresh = jwtService.makeRefreshToken(id)
+        val now = LocalDateTime.now()
+        val expiresAt = now.plusSeconds(JwtService.REFRESH_TOKEN_EXPIRY / 1000)
+
+        transaction {
+            RefreshTokens.insert {
+                it[RefreshTokens.id] = UUID.randomUUID().toString()
+                it[RefreshTokens.userId] = id
+                it[RefreshTokens.token] = refresh
+                it[RefreshTokens.expiresAt] = expiresAt
+                it[RefreshTokens.createdAt] = now
+            }
+        }
+
         val iso = createdAt.atOffset(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT)
         return AuthResponse(
             accessToken = access,

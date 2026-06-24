@@ -4,24 +4,19 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.JWTVerifier
 import com.auth0.jwt.algorithms.Algorithm
 import java.util.Date
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object JWTConfig {
-    private lateinit var algorithm: Algorithm
-    lateinit var issuer: String
-    private lateinit var audience: String
-    private const val ACCESS_TOKEN_EXPIRY = 3600000L
-    private const val REFRESH_TOKEN_EXPIRY = 604800000L
+data class JwtConfig(val issuer: String, val audience: String, val secret: String)
 
-    fun init(issuer: String, audience: String, secret: String) {
-        this.issuer = issuer
-        this.audience = audience
-        this.algorithm = Algorithm.HMAC256(secret)
-    }
+@Singleton
+class JwtService @Inject constructor(private val jwtConfig: JwtConfig) {
+    private val algorithm: Algorithm = Algorithm.HMAC256(jwtConfig.secret)
 
     fun makeAccessToken(userId: String, email: String): String {
         return JWT.create()
-            .withIssuer(issuer)
-            .withAudience(audience)
+            .withIssuer(jwtConfig.issuer)
+            .withAudience(jwtConfig.audience)
             .withSubject(userId)
             .withClaim("email", email)
             .withExpiresAt(Date(System.currentTimeMillis() + ACCESS_TOKEN_EXPIRY))
@@ -30,8 +25,8 @@ object JWTConfig {
 
     fun makeRefreshToken(userId: String): String {
         return JWT.create()
-            .withIssuer(issuer)
-            .withAudience(audience)
+            .withIssuer(jwtConfig.issuer)
+            .withAudience(jwtConfig.audience)
             .withSubject(userId)
             .withClaim("type", "refresh")
             .withExpiresAt(Date(System.currentTimeMillis() + REFRESH_TOKEN_EXPIRY))
@@ -39,7 +34,12 @@ object JWTConfig {
     }
 
     fun verifier(): JWTVerifier = JWT.require(algorithm)
-        .withIssuer(issuer)
-        .withAudience(audience)
+        .withIssuer(jwtConfig.issuer)
+        .withAudience(jwtConfig.audience)
         .build()
+
+    companion object {
+        private const val ACCESS_TOKEN_EXPIRY = 3600000L
+        const val REFRESH_TOKEN_EXPIRY = 604800000L
+    }
 }

@@ -10,7 +10,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 
-fun Application.configureAuth() {
+fun Application.configureAuth(authService: AuthService) {
     routing {
         get("/") {
             call.respond(HttpStatusCode.OK, "MTG BACKEND")
@@ -19,7 +19,7 @@ fun Application.configureAuth() {
             post("/sign-up") {
                 val request = call.receive<SignUpRequest>()
                 val response = try {
-                    AuthService.signUp(request.name, request.email, request.password)
+                    authService.signUp(request.name, request.email, request.password)
                 } catch (e: IllegalArgumentException) {
                     call.respond(HttpStatusCode.Conflict, mapOf("error" to e.message))
                     return@post
@@ -30,7 +30,7 @@ fun Application.configureAuth() {
             post("/sign-in") {
                 val request = call.receive<SignInRequest>()
                 val response = try {
-                    AuthService.signIn(request.email, request.password)
+                    authService.signIn(request.email, request.password)
                 } catch (e: IllegalArgumentException) {
                     call.respond(HttpStatusCode.Unauthorized, mapOf("error" to e.message))
                     return@post
@@ -41,7 +41,7 @@ fun Application.configureAuth() {
             post("/refresh") {
                 val request = call.receive<RefreshTokenRequest>()
                 val response = try {
-                    AuthService.refresh(request.refreshToken)
+                    authService.refresh(request.refreshToken)
                 } catch (e: Exception) {
                     call.respond(
                         HttpStatusCode.Unauthorized,

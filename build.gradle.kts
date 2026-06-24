@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ktor)
+    alias(libs.plugins.ksp)
     id("idea")
 }
 
@@ -36,6 +37,9 @@ dependencies {
     implementation(libs.jbcrypt)
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.kotlin.test.junit)
+    // dagger2
+    implementation("com.google.dagger:dagger:2.59")
+    ksp("com.google.dagger:dagger-compiler:2.59")
 }
 
 idea {

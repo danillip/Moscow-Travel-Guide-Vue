@@ -1,11 +1,12 @@
 [versions]
-kotlin-version = "2.1.10"
+kotlin-version = "2.4.0"
 ktor-version = "3.2.2"
 logback-version = "1.4.14"
 postgresql-version = "42.7.4"
 hikari-version = "6.2.1"
 exposed-version = "0.61.0"
 jbcrypt-version = "0.4"
+ksp = "2.3.9"
 
 [libraries]
 ktor-server-core = { module = "io.ktor:ktor-server-core-jvm", version.ref = "ktor-version" }
@@ -32,3 +33,4 @@ jbcrypt = { module = "org.mindrot:jbcrypt", version.ref = "jbcrypt-version" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin-version" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin-version" }
 ktor = { id = "io.ktor.plugin", version.ref = "ktor-version" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
