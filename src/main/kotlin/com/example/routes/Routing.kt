@@ -2,10 +2,12 @@ package com.example.routes
 
 import com.example.model.RefreshTokenRequest
 import com.example.model.SignInRequest
+import com.example.model.SignOutRequest
 import com.example.model.SignUpRequest
 import com.example.plugins.AuthService
 import io.ktor.http.*
 import io.ktor.server.application.*
+import io.ktor.server.auth.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -50,6 +52,19 @@ fun Application.configureAuth(authService: AuthService) {
                     return@post
                 }
                 call.respond(HttpStatusCode.OK, response)
+            }
+
+            authenticate("auth-jwt") {
+                post("/sign-out") {
+                    val request = call.receive<SignOutRequest>()
+                    try {
+                        authService.signOut(request.refreshToken)
+                    } catch (e: IllegalArgumentException) {
+                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                        return@post
+                    }
+                    call.respond(HttpStatusCode.OK, mapOf("success" to true))
+                }
             }
         }
     }

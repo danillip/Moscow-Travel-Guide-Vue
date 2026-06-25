@@ -57,6 +57,13 @@ class AuthService @Inject constructor(private val jwtService: JwtService) {
         )
     }
 
+    fun signOut(refreshToken: String) {
+        val deleted = transaction {
+            RefreshTokens.deleteWhere { RefreshTokens.token eq refreshToken }
+        }
+        if (deleted == 0) throw IllegalArgumentException("Refresh token not found or already used")
+    }
+
     fun refresh(refreshToken: String): AuthResponse {
         val decoded = jwtService.verifier().verify(refreshToken)
         val type = decoded.getClaim("type").asString()
