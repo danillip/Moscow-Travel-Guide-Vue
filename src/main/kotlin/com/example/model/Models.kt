@@ -34,3 +34,8 @@ data class UserResponse(
 data class RefreshTokenRequest(
     val refreshToken: String
 )
+
+@Serializable
+data class SignOutRequest(
+    val refreshToken: String
+)

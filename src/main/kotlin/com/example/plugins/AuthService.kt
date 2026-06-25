@@ -8,6 +8,7 @@ import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.mindrot.jbcrypt.BCrypt
+import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.time.LocalDateTime
 import java.time.ZoneOffset
@@ -18,6 +19,7 @@ import javax.inject.Singleton
 
 @Singleton
 class AuthService @Inject constructor(private val jwtService: JwtService) {
+    private val log = LoggerFactory.getLogger(AuthService::class.java)
 
     fun signUp(name: String, email: String, password: String): AuthResponse {
         val existing =
@@ -49,12 +51,35 @@ class AuthService @Inject constructor(private val jwtService: JwtService) {
             throw IllegalArgumentException("Invalid email or password")
         }
 
-        return buildResponse(
+        log.info("SignIn: user=${row[Users.id]}, email=${row[Users.email]}")
+
+        val response = buildResponse(
             row[Users.id],
             row[Users.name],
             row[Users.email],
             row[Users.createdAt]
         )
+
+        log.info(
+            "SignIn: access_token_prefix=${response.accessToken.take(20)}..., refresh_token_prefix=${
+                response.refreshToken.take(
+                    20
+                )
+            }..."
+        )
+
+        return response
+    }
+
+    fun signOut(refreshToken: String) {
+        log.info("SignOut: attempting to delete refresh token, token_prefix=${refreshToken.take(20)}...")
+        val deleted = transaction {
+            RefreshTokens.deleteWhere { RefreshTokens.token eq refreshToken }
+        }
+        log.info("SignOut: deleted $deleted token(s) from DB")
+
+        val allTokens = transaction { RefreshTokens.selectAll().toList() }
+        log.info("SignOut: ${allTokens.size} token(s) remaining in DB")
     }
 
     fun refresh(refreshToken: String): AuthResponse {

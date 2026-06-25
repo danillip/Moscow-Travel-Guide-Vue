@@ -3,6 +3,7 @@ package com.example.plugins
 import com.auth0.jwt.JWT
 import com.auth0.jwt.JWTVerifier
 import com.auth0.jwt.algorithms.Algorithm
+import org.slf4j.LoggerFactory
 import java.util.Date
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -11,16 +12,19 @@ data class JwtConfig(val issuer: String, val audience: String, val secret: Strin
 
 @Singleton
 class JwtService @Inject constructor(private val jwtConfig: JwtConfig) {
+    private val log = LoggerFactory.getLogger(JwtService::class.java)
     private val algorithm: Algorithm = Algorithm.HMAC256(jwtConfig.secret)
 
     fun makeAccessToken(userId: String, email: String): String {
-        return JWT.create()
+        val token = JWT.create()
             .withIssuer(jwtConfig.issuer)
             .withAudience(jwtConfig.audience)
             .withSubject(userId)
             .withClaim("email", email)
             .withExpiresAt(Date(System.currentTimeMillis() + ACCESS_TOKEN_EXPIRY))
             .sign(algorithm)
+        log.info("AccessToken created for user=$userId, issuer=${jwtConfig.issuer}, audience=${jwtConfig.audience}, token_prefix=${token}...")
+        return token
     }
 
     fun makeRefreshToken(userId: String): String {
