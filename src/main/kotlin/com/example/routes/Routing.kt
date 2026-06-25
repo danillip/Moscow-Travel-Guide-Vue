@@ -11,8 +11,6 @@ import io.ktor.server.auth.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import org.slf4j.LoggerFactory
-
 
 fun Application.configureAuth(authService: AuthService) {
     routing {
@@ -58,13 +56,13 @@ fun Application.configureAuth(authService: AuthService) {
 
             authenticate("auth-jwt") {
                 post("/sign-out") {
-                    val principal = call.principal<UserIdPrincipal>()
-                    log.info("Sign-out request from user=${principal?.name}")
-                    val authHeader = call.request.headers["Authorization"]
-                    log.info("Sign-out Authorization header: $authHeader")
                     val request = call.receive<SignOutRequest>()
-                    log.info("Sign-out body: refreshToken_prefix=${request.refreshToken.take(20)}...")
-                    authService.signOut(request.refreshToken)
+                    try {
+                        authService.signOut(request.refreshToken)
+                    } catch (e: IllegalArgumentException) {
+                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                        return@post
+                    }
                     call.respond(HttpStatusCode.OK, mapOf("success" to true))
                 }
             }
