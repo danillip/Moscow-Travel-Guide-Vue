@@ -24,5 +24,5 @@ fun Application.module() {
     val jwtAudience = environment.config.property("jwt.audience").getString()
     val jwtSecret = environment.config.property("jwt.secret").getString()
     globalSettings(jwtSecret, jwtIssuer, jwtAudience)
-    configureAuth(component.authService())
+    configureAuth(component.authService(), component.placeService())
 }
