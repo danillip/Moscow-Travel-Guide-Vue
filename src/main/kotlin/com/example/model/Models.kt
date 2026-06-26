@@ -1,6 +1,36 @@
 package com.example.model
 
+import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
+import io.ktor.server.response.respond
 import kotlinx.serialization.Serializable
+
+@Serializable
+data class ErrorDetail(
+    val field: String? = null,
+    val message: String
+)
+
+@Serializable
+data class ErrorBody(
+    val code: String,
+    val message: String,
+    val details: List<ErrorDetail>? = null
+)
+
+@Serializable
+data class ApiErrorResponse(
+    val error: ErrorBody
+)
+
+suspend fun ApplicationCall.respondError(
+    status: HttpStatusCode,
+    code: String,
+    message: String,
+    details: List<ErrorDetail>? = null
+) {
+    respond(status, ApiErrorResponse(ErrorBody(code = code, message = message, details = details)))
+}
 
 @Serializable
 data class SignUpRequest(
