@@ -8,6 +8,7 @@ import com.example.plugins.AuthService
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
+import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -55,6 +56,19 @@ fun Application.configureAuth(authService: AuthService) {
             }
 
             authenticate("auth-jwt") {
+                get("/me") {
+                    val principal =
+                        call.principal<JWTPrincipal>().also { println("principal: $it") }!!
+                    val userId = principal.payload.subject
+                    val response = try {
+                        authService.getCurrentUser(userId)
+                    } catch (e: IllegalArgumentException) {
+                        call.respond(HttpStatusCode.NotFound, mapOf("error" to e.message))
+                        return@get
+                    }
+                    call.respond(HttpStatusCode.OK, response)
+                }
+
                 post("/sign-out") {
                     val request = call.receive<SignOutRequest>()
                     try {

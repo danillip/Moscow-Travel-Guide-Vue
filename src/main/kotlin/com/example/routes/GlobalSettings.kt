@@ -24,7 +24,7 @@ fun Application.globalSettings(jwtSecret: String, jwtIssuer: String, jwtAudience
             )
             validate { credential ->
                 if (credential.payload.getClaim("type").isMissing) {
-                    io.ktor.server.auth.UserIdPrincipal(credential.payload.subject)
+                    io.ktor.server.auth.jwt.JWTPrincipal(credential.payload)
                 } else {
                     null
                 }
