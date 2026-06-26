@@ -4,6 +4,7 @@ import com.example.model.RefreshTokenRequest
 import com.example.model.SignInRequest
 import com.example.model.SignOutRequest
 import com.example.model.SignUpRequest
+import com.example.model.respondError
 import com.example.plugins.AuthService
 import com.example.plugins.PlaceService
 import io.ktor.http.*
@@ -33,7 +34,7 @@ fun Application.configureAuth(authService: AuthService, placeService: PlaceServi
                 val placeId = call.parameters["placeId"]!!
                 val place = placeService.getPlaceById(placeId)
                 if (place == null) {
-                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Place not found"))
+                    call.respondError(HttpStatusCode.NotFound, "NOT_FOUND", "Место не найдено")
                     return@get
                 }
                 call.respond(HttpStatusCode.OK, place)
@@ -44,7 +45,11 @@ fun Application.configureAuth(authService: AuthService, placeService: PlaceServi
                 val response = try {
                     authService.signUp(request.name, request.email, request.password)
                 } catch (e: IllegalArgumentException) {
-                    call.respond(HttpStatusCode.Conflict, mapOf("error" to e.message))
+                    call.respondError(
+                        HttpStatusCode.Conflict,
+                        "EMAIL_ALREADY_EXISTS",
+                        e.message ?: "Email уже зарегистрирован"
+                    )
                     return@post
                 }
                 call.respond(HttpStatusCode.Created, response)
@@ -55,7 +60,11 @@ fun Application.configureAuth(authService: AuthService, placeService: PlaceServi
                 val response = try {
                     authService.signIn(request.email, request.password)
                 } catch (e: IllegalArgumentException) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to e.message))
+                    call.respondError(
+                        HttpStatusCode.Unauthorized,
+                        "UNAUTHORIZED",
+                        e.message ?: "Неверные учётные данные"
+                    )
                     return@post
                 }
                 call.respond(HttpStatusCode.OK, response)
@@ -65,10 +74,11 @@ fun Application.configureAuth(authService: AuthService, placeService: PlaceServi
                 val request = call.receive<RefreshTokenRequest>()
                 val response = try {
                     authService.refresh(request.refreshToken)
-                } catch (e: Exception) {
-                    call.respond(
+                } catch (_: Exception) {
+                    call.respondError(
                         HttpStatusCode.Unauthorized,
-                        mapOf("error" to "Invalid refresh token")
+                        "UNAUTHORIZED",
+                        "Некорректный refresh токен"
                     )
                     return@post
                 }
@@ -82,8 +92,12 @@ fun Application.configureAuth(authService: AuthService, placeService: PlaceServi
                     val userId = principal.payload.subject
                     val response = try {
                         authService.getCurrentUser(userId)
-                    } catch (e: IllegalArgumentException) {
-                        call.respond(HttpStatusCode.NotFound, mapOf("error" to e.message))
+                    } catch (_: IllegalArgumentException) {
+                        call.respondError(
+                            HttpStatusCode.NotFound,
+                            "NOT_FOUND",
+                            "Пользователь не найден"
+                        )
                         return@get
                     }
                     call.respond(HttpStatusCode.OK, response)
@@ -94,7 +108,11 @@ fun Application.configureAuth(authService: AuthService, placeService: PlaceServi
                     try {
                         authService.signOut(request.refreshToken)
                     } catch (e: IllegalArgumentException) {
-                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
+                        call.respondError(
+                            HttpStatusCode.BadRequest,
+                            "VALIDATION_ERROR",
+                            e.message ?: "Некорректные данные"
+                        )
                         return@post
                     }
                     call.respond(HttpStatusCode.OK, mapOf("success" to true))

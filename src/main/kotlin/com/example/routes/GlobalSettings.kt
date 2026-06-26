@@ -2,15 +2,16 @@ package com.example.routes
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.example.model.respondError
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
-import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.server.plugins.statuspages.StatusPages
-import io.ktor.server.response.respond
 import io.ktor.server.auth.Authentication
 import io.ktor.server.auth.jwt.jwt
+import io.ktor.server.plugins.BadRequestException
+import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.plugins.statuspages.StatusPages
 import kotlinx.serialization.json.Json
 
 fun Application.globalSettings(jwtSecret: String, jwtIssuer: String, jwtAudience: String) {
@@ -30,9 +31,10 @@ fun Application.globalSettings(jwtSecret: String, jwtIssuer: String, jwtAudience
                 }
             }
             challenge { _, _ ->
-                call.respond(
+                call.respondError(
                     HttpStatusCode.Unauthorized,
-                    mapOf("error" to "Invalid or missing token")
+                    "UNAUTHORIZED",
+                    "Некорректный или отсутствующий токен"
                 )
             }
         }
@@ -47,12 +49,26 @@ fun Application.globalSettings(jwtSecret: String, jwtIssuer: String, jwtAudience
     }
 
     install(StatusPages) {
-        exception<Throwable> { call, cause ->
-            val status = when (cause) {
-                is IllegalArgumentException -> HttpStatusCode.BadRequest
-                else -> HttpStatusCode.InternalServerError
-            }
-            call.respond(status, mapOf("error" to (cause.message ?: "Unknown error")))
+        exception<BadRequestException> { call, _ ->
+            call.respondError(
+                HttpStatusCode.BadRequest,
+                "VALIDATION_ERROR",
+                "Некорректные данные запроса"
+            )
+        }
+        exception<IllegalArgumentException> { call, cause ->
+            call.respondError(
+                HttpStatusCode.BadRequest,
+                "VALIDATION_ERROR",
+                cause.message ?: "Некорректные данные запроса"
+            )
+        }
+        exception<Throwable> { call, _ ->
+            call.respondError(
+                HttpStatusCode.InternalServerError,
+                "INTERNAL_SERVER_ERROR",
+                "Внутренняя ошибка сервера"
+            )
         }
     }
 }
