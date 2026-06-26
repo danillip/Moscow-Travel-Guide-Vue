@@ -1,6 +1,7 @@
 package com.example.plugins
 
 import com.example.model.AuthResponse
+import com.example.model.CurrentUserResponse
 import com.example.model.UserResponse
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.deleteWhere
@@ -54,6 +55,22 @@ class AuthService @Inject constructor(private val jwtService: JwtService) {
             row[Users.name],
             row[Users.email],
             row[Users.createdAt]
+        )
+    }
+
+    fun getCurrentUser(userId: String): CurrentUserResponse {
+        val row = transaction { Users.selectAll().where { Users.id eq userId }.firstOrNull() }
+            ?: throw IllegalArgumentException("User not found")
+
+        val iso =
+            row[Users.createdAt].atOffset(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT)
+        return CurrentUserResponse(
+            user = UserResponse(
+                id = row[Users.id],
+                name = row[Users.name],
+                email = row[Users.email],
+                createdAt = iso
+            )
         )
     }
 
