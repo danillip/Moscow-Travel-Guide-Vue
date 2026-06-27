@@ -1,7 +1,13 @@
-package com.example.plugins
+package com.example.service
 
-import com.example.model.*
+import com.example.model.CreateRouteRequest
+import com.example.model.PlacesMeta
+import com.example.model.SavedRoute
+import com.example.model.SavedRoutesResponse
+import com.example.model.UpdateRouteRequest
+import com.example.database.table.SavedRoutes
 import kotlinx.serialization.json.Json
+import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.deleteWhere
@@ -17,11 +23,11 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class RouteService @Inject constructor() {
+internal class RouteServiceImpl @Inject constructor() : RouteService {
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json: Json = Json { ignoreUnknownKeys = true }
 
-    fun getRoutes(userId: String, page: Int, limit: Int): SavedRoutesResponse {
+    override fun getRoutes(userId: String, page: Int, limit: Int): SavedRoutesResponse {
         val rows = transaction {
             SavedRoutes.selectAll()
                 .where { SavedRoutes.userId eq userId }
@@ -44,7 +50,7 @@ class RouteService @Inject constructor() {
         )
     }
 
-    fun getRouteById(userId: String, routeId: String): SavedRoute? {
+    override fun getRouteById(userId: String, routeId: String): SavedRoute? {
         val row = transaction {
             SavedRoutes.selectAll()
                 .where { (SavedRoutes.userId eq userId) and (SavedRoutes.id eq routeId) }
@@ -53,12 +59,12 @@ class RouteService @Inject constructor() {
         return rowToRoute(row)
     }
 
-    fun createRoute(userId: String, request: CreateRouteRequest): SavedRoute {
+    override fun createRoute(userId: String, request: CreateRouteRequest): SavedRoute {
         val id = "route_${UUID.randomUUID()}"
         val now = LocalDateTime.now()
-        val pointsJson = json.encodeToString(request.points)
-        val placeIdsJson = json.encodeToString(request.placeIds)
-        val routeInfoJson = json.encodeToString(request.routeInfo)
+        val pointsJson: String = json.encodeToString(request.points)
+        val placeIdsJson: String = json.encodeToString(request.placeIds)
+        val routeInfoJson: String = json.encodeToString(request.routeInfo)
 
         transaction {
             SavedRoutes.insert {
@@ -79,7 +85,11 @@ class RouteService @Inject constructor() {
         return getRouteById(userId, id)!!
     }
 
-    fun updateRoute(userId: String, routeId: String, request: UpdateRouteRequest): SavedRoute? {
+    override fun updateRoute(
+        userId: String,
+        routeId: String,
+        request: UpdateRouteRequest
+    ): SavedRoute? {
         val existing = getRouteById(userId, routeId) ?: return null
         val now = LocalDateTime.now()
 
@@ -99,15 +109,15 @@ class RouteService @Inject constructor() {
         return getRouteById(userId, routeId)
     }
 
-    fun deleteRoute(userId: String, routeId: String): Boolean {
+    override fun deleteRoute(userId: String, routeId: String): Boolean {
         val deleted = transaction {
             SavedRoutes.deleteWhere { (SavedRoutes.userId eq userId) and (SavedRoutes.id eq routeId) }
         }
         return deleted > 0
     }
 
-    private fun rowToRoute(row: org.jetbrains.exposed.sql.ResultRow): SavedRoute {
-        val iso = { dt: LocalDateTime ->
+    private fun rowToRoute(row: ResultRow): SavedRoute {
+        val iso: (LocalDateTime) -> String = { dt: LocalDateTime ->
             dt.atOffset(ZoneOffset.UTC).format(DateTimeFormatter.ISO_INSTANT)
         }
         return SavedRoute(

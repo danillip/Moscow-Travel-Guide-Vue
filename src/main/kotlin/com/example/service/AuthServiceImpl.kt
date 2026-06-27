@@ -1,15 +1,16 @@
-package com.example.plugins
+package com.example.service
 
 import com.example.model.AuthResponse
 import com.example.model.CurrentUserResponse
 import com.example.model.UserResponse
+import com.example.database.table.RefreshTokens
+import com.example.database.table.Users
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.mindrot.jbcrypt.BCrypt
-import java.time.Duration
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -18,9 +19,10 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class AuthService @Inject constructor(private val jwtService: JwtService) {
+internal class AuthServiceImpl @Inject constructor(private val jwtService: JwtService) :
+    AuthService {
 
-    fun signUp(name: String, email: String, password: String): AuthResponse {
+    override fun signUp(name: String, email: String, password: String): AuthResponse {
         val existing =
             transaction { Users.selectAll().where { Users.email eq email }.firstOrNull() }
         if (existing != null) throw IllegalArgumentException("Email already registered")
@@ -42,7 +44,7 @@ class AuthService @Inject constructor(private val jwtService: JwtService) {
         return buildResponse(id, name, email, now)
     }
 
-    fun signIn(email: String, password: String): AuthResponse {
+    override fun signIn(email: String, password: String): AuthResponse {
         val row = transaction { Users.selectAll().where { Users.email eq email }.firstOrNull() }
             ?: throw IllegalArgumentException("Invalid email or password")
 
@@ -58,7 +60,7 @@ class AuthService @Inject constructor(private val jwtService: JwtService) {
         )
     }
 
-    fun getCurrentUser(userId: String): CurrentUserResponse {
+    override fun getCurrentUser(userId: String): CurrentUserResponse {
         val row = transaction { Users.selectAll().where { Users.id eq userId }.firstOrNull() }
             ?: throw IllegalArgumentException("User not found")
 
@@ -74,14 +76,14 @@ class AuthService @Inject constructor(private val jwtService: JwtService) {
         )
     }
 
-    fun signOut(refreshToken: String) {
+    override fun signOut(refreshToken: String) {
         val deleted = transaction {
             RefreshTokens.deleteWhere { RefreshTokens.token eq refreshToken }
         }
         if (deleted == 0) throw IllegalArgumentException("Refresh token not found or already used")
     }
 
-    fun refresh(refreshToken: String): AuthResponse {
+    override fun refresh(refreshToken: String): AuthResponse {
         val decoded = jwtService.verifier().verify(refreshToken)
         val type = decoded.getClaim("type").asString()
         if (type != "refresh") throw IllegalArgumentException("Invalid token type")
@@ -113,7 +115,7 @@ class AuthService @Inject constructor(private val jwtService: JwtService) {
         val access = jwtService.makeAccessToken(id, email)
         val refresh = jwtService.makeRefreshToken(id)
         val now = LocalDateTime.now()
-        val expiresAt = now.plusSeconds(JwtService.REFRESH_TOKEN_EXPIRY / 1000)
+        val expiresAt = now.plusSeconds(JwtServiceImpl.REFRESH_TOKEN_EXPIRY / 1000)
 
         transaction {
             RefreshTokens.insert {

@@ -6,7 +6,7 @@ ktor:
     port: 8080
 
 db:
-  url: "jdbc:postgresql://postgres:5432/mtg?sslmode=disable"
+  url: "jdbc:postgresql://localhost:5432/mtg?sslmode=disable"
   user: "postgres"
   password: "postgres"
 

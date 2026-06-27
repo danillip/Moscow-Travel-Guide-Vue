@@ -1,4 +1,4 @@
-package com.example.plugins
+package com.example.service
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.JWTVerifier
@@ -7,13 +7,13 @@ import java.util.Date
 import javax.inject.Inject
 import javax.inject.Singleton
 
-data class JwtConfig(val issuer: String, val audience: String, val secret: String)
+internal data class JwtConfig(val issuer: String, val audience: String, val secret: String)
 
 @Singleton
-class JwtService @Inject constructor(private val jwtConfig: JwtConfig) {
+internal class JwtServiceImpl @Inject constructor(private val jwtConfig: JwtConfig) : JwtService {
     private val algorithm: Algorithm = Algorithm.HMAC256(jwtConfig.secret)
 
-    fun makeAccessToken(userId: String, email: String): String {
+    override fun makeAccessToken(userId: String, email: String): String {
         return JWT.create()
             .withIssuer(jwtConfig.issuer)
             .withAudience(jwtConfig.audience)
@@ -23,7 +23,7 @@ class JwtService @Inject constructor(private val jwtConfig: JwtConfig) {
             .sign(algorithm)
     }
 
-    fun makeRefreshToken(userId: String): String {
+    override fun makeRefreshToken(userId: String): String {
         return JWT.create()
             .withIssuer(jwtConfig.issuer)
             .withAudience(jwtConfig.audience)
@@ -33,7 +33,7 @@ class JwtService @Inject constructor(private val jwtConfig: JwtConfig) {
             .sign(algorithm)
     }
 
-    fun verifier(): JWTVerifier = JWT.require(algorithm)
+    override fun verifier(): JWTVerifier = JWT.require(algorithm)
         .withIssuer(jwtConfig.issuer)
         .withAudience(jwtConfig.audience)
         .build()

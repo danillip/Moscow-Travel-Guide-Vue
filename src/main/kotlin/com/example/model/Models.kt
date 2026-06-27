@@ -6,54 +6,53 @@ import io.ktor.server.response.respond
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class ErrorDetail(
+internal data class ErrorDetail(
     val field: String? = null,
     val message: String
 )
 
 @Serializable
-data class ErrorBody(
+internal data class ErrorBody(
     val code: String,
     val message: String,
     val details: List<ErrorDetail>? = null
 )
 
 @Serializable
-data class ApiErrorResponse(
+internal data class ApiErrorResponse(
     val error: ErrorBody
 )
 
-suspend fun ApplicationCall.respondError(
+internal suspend fun ApplicationCall.respondError(
     status: HttpStatusCode,
     code: String,
     message: String,
     details: List<ErrorDetail>? = null
-) {
+): Unit =
     respond(status, ApiErrorResponse(ErrorBody(code = code, message = message, details = details)))
-}
 
 @Serializable
-data class SignUpRequest(
+internal data class SignUpRequest(
     val name: String,
     val email: String,
     val password: String
 )
 
 @Serializable
-data class SignInRequest(
+internal data class SignInRequest(
     val email: String,
     val password: String
 )
 
 @Serializable
-data class AuthResponse(
+internal data class AuthResponse(
     val accessToken: String,
     val refreshToken: String,
     val user: UserResponse
 )
 
 @Serializable
-data class UserResponse(
+internal data class UserResponse(
     val id: String,
     val name: String,
     val email: String,
@@ -61,22 +60,22 @@ data class UserResponse(
 )
 
 @Serializable
-data class RefreshTokenRequest(
+internal data class RefreshTokenRequest(
     val refreshToken: String
 )
 
 @Serializable
-data class SignOutRequest(
+internal data class SignOutRequest(
     val refreshToken: String
 )
 
 @Serializable
-data class CurrentUserResponse(
+internal data class CurrentUserResponse(
     val user: UserResponse
 )
 
 @Serializable
-data class Place(
+internal data class Place(
     val id: String,
     val title: String,
     val category: String,
@@ -89,13 +88,13 @@ data class Place(
 )
 
 @Serializable
-data class PlacesResponse(
+internal data class PlacesResponse(
     val items: List<Place>,
     val meta: PlacesMeta
 )
 
 @Serializable
-data class PlacesMeta(
+internal data class PlacesMeta(
     val page: Int,
     val limit: Int,
     val total: Int,
@@ -103,12 +102,12 @@ data class PlacesMeta(
 )
 
 @Serializable
-data class PlaceCategoriesResponse(
+internal data class PlaceCategoriesResponse(
     val items: List<String>
 )
 
 @Serializable
-data class RouteInfo(
+internal data class RouteInfo(
     val canVisit: Boolean,
     val distanceKm: Double,
     val totalSeconds: Int,
@@ -118,7 +117,7 @@ data class RouteInfo(
 )
 
 @Serializable
-data class SavedRoute(
+internal data class SavedRoute(
     val id: String,
     val userId: String,
     val title: String,
@@ -133,13 +132,13 @@ data class SavedRoute(
 )
 
 @Serializable
-data class SavedRoutesResponse(
+internal data class SavedRoutesResponse(
     val items: List<SavedRoute>,
     val meta: PlacesMeta
 )
 
 @Serializable
-data class CreateRouteRequest(
+internal data class CreateRouteRequest(
     val title: String,
     val type: String,
     val points: List<List<Double>>,
@@ -150,7 +149,7 @@ data class CreateRouteRequest(
 )
 
 @Serializable
-data class UpdateRouteRequest(
+internal data class UpdateRouteRequest(
     val title: String? = null,
     val type: String? = null,
     val points: List<List<Double>>? = null,
