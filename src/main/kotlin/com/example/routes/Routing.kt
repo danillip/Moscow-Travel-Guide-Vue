@@ -4,6 +4,7 @@ import com.example.model.RefreshTokenRequest
 import com.example.model.SignInRequest
 import com.example.model.SignOutRequest
 import com.example.model.SignUpRequest
+import com.example.model.PlaceCategoriesResponse
 import com.example.model.respondError
 import com.example.plugins.AuthService
 import com.example.plugins.PlaceService
@@ -28,6 +29,11 @@ fun Application.configureAuth(authService: AuthService, placeService: PlaceServi
                 val limit = call.queryParameters["limit"]?.toIntOrNull() ?: 50
                 val response = placeService.getPlaces(category, search, page, limit)
                 call.respond(HttpStatusCode.OK, response)
+            }
+
+            get("/place-categories") {
+                val categories = placeService.getCategories()
+                call.respond(HttpStatusCode.OK, PlaceCategoriesResponse(items = categories))
             }
 
             get("/places/{placeId}") {
