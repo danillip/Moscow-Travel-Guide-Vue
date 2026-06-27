@@ -101,3 +101,8 @@ data class PlacesMeta(
     val total: Int,
     val hasMore: Boolean
 )
+
+@Serializable
+data class PlaceCategoriesResponse(
+    val items: List<String>
+)

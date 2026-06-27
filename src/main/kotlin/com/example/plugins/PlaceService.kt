@@ -55,4 +55,9 @@ class PlaceService @Inject constructor() {
     fun getPlaceById(id: String): Place? {
         return places.find { it.id == id && it.isActive }
     }
+
+    fun getCategories(): List<String> {
+        val categories = places.filter { it.isActive }.map { it.category }.distinct()
+        return listOf("Все") + categories
+    }
 }
