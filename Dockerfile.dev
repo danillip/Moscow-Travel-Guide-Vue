@@ -12,4 +12,4 @@ COPY build.gradle.kts settings.gradle.kts gradle.properties ./
 
 # バックグラウンドでソースファイルの変更をリアルタイムにビルド & development modeでアプリケーションを実行（ビルドファイルの変更を即時反映）
 # NOTE: ./gradlew runでも最初にビルドが走るので、コンテナ起動後にビルドのログが二つ出力される
-ENTRYPOINT ["bash", "-c", "./gradlew run"]
+ENTRYPOINT ["bash", "-c", "sed -i 's/\\r$//' gradlew && chmod +x gradlew && ./gradlew run"]

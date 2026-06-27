@@ -1,5 +1,5 @@
 <template>
-  <main class="c-intro" @mousemove="(event) => onMouseMove(event)">
+  <main class="c-intro" :class="introThemeClass" @mousemove="(event) => onMouseMove(event)">
     <section class="c-intro__layers">
       <div class="c-intro__container" :style="containerStyle">
         <div
@@ -102,6 +102,7 @@
 import { animate, stagger } from 'motion'
 import { ROUTES } from '@/router/index.js'
 import { TRAVEL_PLACES } from '@/constants/travelMarks.js'
+import { getStoredUiTheme, getUiThemeClass } from '@/utils/uiTheme.js'
 import layerBack from '@/assets/travel/images/layer-1.jpg'
 import layerMiddle from '@/assets/travel/images/layer-2.png'
 import layerFront from '@/assets/travel/images/layer-5.png'
@@ -124,6 +125,7 @@ export default {
       rainItems: [],
       rainRafId: null,
       motionControls: [],
+      uiTheme: getStoredUiTheme(),
       featuredRoute: {
         places: [],
         totalMinutes: 0
@@ -178,6 +180,9 @@ export default {
       }
 
       return `около ${hours} ч ${minutes} мин`
+    },
+    introThemeClass() {
+      return getUiThemeClass(this.uiTheme, 'c-intro')
     }
   },
   created() {
@@ -187,9 +192,11 @@ export default {
     this.setupRain()
     this.$nextTick(() => this.animateIntroPanel())
     window.addEventListener('resize', this.setupRain)
+    window.addEventListener('mtg-ui-theme-change', this.syncUiTheme)
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.setupRain)
+    window.removeEventListener('mtg-ui-theme-change', this.syncUiTheme)
     this.motionControls.forEach((control) => {
       if (control && control.stop) {
         control.stop()
@@ -204,6 +211,9 @@ export default {
     onMouseMove(event) {
       this.moveX = (event.clientX - window.innerWidth / 2) * -0.005
       this.moveY = (event.clientY - window.innerHeight / 2) * 0.01
+    },
+    syncUiTheme(event) {
+      this.uiTheme = event?.detail?.theme || getStoredUiTheme()
     },
     startTravel() {
       this.$router.push({ name: ROUTES.MAP })
@@ -764,6 +774,161 @@ export default {
   &__rain {
     width: 100%;
     height: 100%;
+  }
+
+  &--pixel {
+    --c-intro-ink: #fff7d6;
+    --c-intro-muted: #c8c1e8;
+    --c-intro-neon: #39ff88;
+    --c-intro-ember: #ffd23f;
+    background:
+      linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+      linear-gradient(135deg, #07071d 0%, #17123d 50%, #07071d 100%);
+    background-size: 12px 12px, 12px 12px, auto;
+    font-family: 'Courier New', Consolas, monospace;
+    image-rendering: pixelated;
+
+    &::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      pointer-events: none;
+      opacity: 0.16;
+      background: repeating-linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.15) 0,
+        rgba(255, 255, 255, 0.15) 1px,
+        transparent 1px,
+        transparent 5px
+      );
+      mix-blend-mode: soft-light;
+    }
+
+    .c-intro__layer--back {
+      filter: saturate(1.18) contrast(1.22) brightness(0.72);
+    }
+
+    .c-intro__shell,
+    .c-intro__routeCard,
+    .c-intro__projectStat,
+    .c-intro__routeSummary,
+    .c-intro__badge {
+      border: 2px solid #fff7d6;
+      border-radius: 0;
+      background:
+        linear-gradient(180deg, rgba(24, 20, 65, 0.92), rgba(8, 9, 31, 0.92)),
+        linear-gradient(90deg, rgba(57, 255, 136, 0.12), transparent);
+      box-shadow:
+        5px 5px 0 #000,
+        inset 0 0 0 2px rgba(57, 255, 136, 0.13);
+      backdrop-filter: none;
+    }
+
+    .c-intro__shell {
+      min-height: min(700px, calc(100vh - 64px));
+
+      &::before {
+        inset: 12px;
+        border: 2px dashed rgba(57, 255, 136, 0.44);
+        border-radius: 0;
+      }
+
+      &::after {
+        border-radius: 0;
+        background:
+          linear-gradient(135deg, rgba(57, 255, 136, 0.13), transparent 32%),
+          linear-gradient(315deg, rgba(255, 210, 63, 0.12), transparent 34%);
+      }
+    }
+
+    .c-intro__brand,
+    .c-intro__badge,
+    .c-intro__routeKicker,
+    .c-intro__routeNumber,
+    .c-intro__projectValue {
+      color: var(--c-intro-neon);
+      text-shadow: 2px 2px 0 #000;
+    }
+
+    .c-intro__title,
+    .c-intro__routeTitle,
+    .c-intro__routeTime {
+      font-family: 'Courier New', Consolas, monospace;
+      font-weight: 900;
+      letter-spacing: 0;
+      text-shadow: 3px 3px 0 #000;
+    }
+
+    .c-intro__title {
+      font-size: clamp(34px, 7vw, 92px);
+      line-height: 0.98;
+    }
+
+    .c-intro__titleAccent {
+      color: var(--c-intro-ember);
+      -webkit-text-stroke: 0;
+      text-shadow: 3px 3px 0 #000;
+    }
+
+    .c-intro__lead,
+    .c-intro__hint,
+    .c-intro__nav,
+    .c-intro__projectLabel,
+    .c-intro__routeText,
+    .c-intro__routeMeta,
+    .c-intro__routeSummaryText {
+      font-family: 'Courier New', Consolas, monospace;
+    }
+
+    .c-intro__start {
+      border: 2px solid #fff7d6;
+      border-radius: 0;
+      background: #17123d;
+      box-shadow: 4px 4px 0 #000;
+      color: var(--c-intro-ink);
+
+      &::before {
+        background: var(--c-intro-neon);
+      }
+
+      &:hover {
+        border-color: #fff7d6;
+        color: #07071d;
+        transform: translate(-1px, -1px);
+        box-shadow: 6px 6px 0 #000;
+      }
+    }
+
+    .c-intro__startIcon {
+      border-radius: 0;
+      background: var(--c-intro-ember);
+      box-shadow: 3px 3px 0 #000;
+    }
+
+    .c-intro__badgeDot {
+      border-radius: 0;
+      box-shadow: 0 0 0 2px #000, 0 0 18px var(--c-intro-neon);
+    }
+
+    .c-intro__routeNumber {
+      border: 2px solid var(--c-intro-neon);
+      border-radius: 0;
+      background: #07071d;
+      letter-spacing: 0;
+    }
+
+    .c-intro__routeItem:not(:last-child)::after {
+      width: 2px;
+      background: repeating-linear-gradient(
+        180deg,
+        var(--c-intro-neon) 0,
+        var(--c-intro-neon) 5px,
+        transparent 5px,
+        transparent 9px
+      );
+    }
   }
 }
 

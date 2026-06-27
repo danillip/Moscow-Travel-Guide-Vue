@@ -1,5 +1,5 @@
 <template>
-  <main class="c-map-page" :style="themeStyle">
+  <main class="c-map-page" :class="pageThemeClass" :style="themeStyle">
     <section class="c-map-page__panel">
       <header class="c-map-page__header">
         <div class="c-map-page__brandBlock">
@@ -256,6 +256,21 @@
       <div class="c-map-page__settingsBody">
         <p class="c-map-page__settingsText">Выбери настроение интерфейса. Это меняет акцентные цвета панели, не ломая карту и маршруты.</p>
 
+        <div class="c-map-page__uiStyleList" role="group" aria-label="Стиль интерфейса">
+          <h3 class="c-map-page__settingsSubtitle">Стиль интерфейса</h3>
+          <button
+            v-for="option in uiThemeOptions"
+            :key="option.value"
+            class="c-map-page__uiStyleBtn"
+            :class="{ 'c-map-page__uiStyleBtn--active': uiTheme === option.value }"
+            type="button"
+            @click="() => selectUiTheme(option.value)"
+          >
+            <span class="c-map-page__uiStyleTitle">{{ option.title }}</span>
+            <span class="c-map-page__uiStyleText">{{ option.description }}</span>
+          </button>
+        </div>
+
         <div class="c-map-page__themeList">
           <button
             v-for="(theme, index) in themes"
@@ -330,7 +345,18 @@ import { markRaw } from 'vue'
 import { mapActions, mapGetters } from 'vuex'
 import { ROUTE_DEFAULTS } from '@/constants/travelConfig.js'
 import { TRAVEL_PLACES } from '@/constants/travelMarks.js'
-import { fetchTravelPlaces } from '@/api/travelApi.js'
+import {
+  getStoredUiTheme,
+  getUiThemeClass,
+  setStoredUiTheme,
+  UI_THEMES
+} from '@/utils/uiTheme.js'
+import {
+  fetchPlaceCategories,
+  fetchTravelPlaces,
+  hasApiAccessToken,
+  saveTravelRoute
+} from '@/api/travelApi.js'
 import {
   createDijkstraRoute,
   createRotatedRoute,
@@ -354,7 +380,10 @@ export default {
       routeArrowStartedAt: 0,
       searchQuery: '',
       places: TRAVEL_PLACES,
+      apiPlaceCategories: [],
       activeCategory: 'Все',
+      uiTheme: getStoredUiTheme(),
+      uiThemeOptions: UI_THEMES,
       focusedPlaceId: '',
       catalogOpen: false,
       catalogPosition: {
@@ -499,11 +528,15 @@ export default {
     settingsPanelStyle() {
       return {
         left: `${this.settingsPosition.x}px`,
-        top: `${this.settingsPosition.y}px`
+        top: `${this.settingsPosition.y}px`,
+        '--c-map-settings-max-height': `${this.settingsMaxHeight}px`
       }
     },
     selectedTheme() {
       return this.themes[this.selectedThemeIndex]
+    },
+    pageThemeClass() {
+      return getUiThemeClass(this.uiTheme, 'c-map-page')
     },
     themeStyle() {
       return {
@@ -516,7 +549,11 @@ export default {
       }
     },
     placeCategories() {
-      return ['Все', ...new Set(this.places.map((place) => place.category))]
+      const categories = this.apiPlaceCategories.length
+        ? this.apiPlaceCategories
+        : ['Все', ...new Set(this.places.map((place) => place.category))]
+
+      return [...new Set(['Все', ...categories.filter((category) => category !== 'Все')])]
     },
     filteredPlaces() {
       if (this.activeCategory === 'Все') {
@@ -527,11 +564,15 @@ export default {
     },
     focusedPlace() {
       return this.places.find((place) => place.id === this.focusedPlaceId) || null
+    },
+    settingsMaxHeight() {
+      return Math.max(360, window.innerHeight - this.settingsPosition.y - 14)
     }
   },
 
   mounted() {
     this.$nextTick(() => this.animateMapUi())
+    window.addEventListener('resize', this.onViewportResize)
     this.loadTravelPlaces()
     this.loadYandexApi()
       .then(() => this.initMap())
@@ -556,6 +597,7 @@ export default {
     window.removeEventListener('mouseup', this.stopSavedRoutesDrag)
     window.removeEventListener('mousemove', this.onSettingsDrag)
     window.removeEventListener('mouseup', this.stopSettingsDrag)
+    window.removeEventListener('resize', this.onViewportResize)
 
     if (this._map) {
       this._map.destroy()
@@ -582,13 +624,28 @@ export default {
       return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
     },
     loadTravelPlaces() {
-      return fetchTravelPlaces()
-        .then((places) => {
+      return Promise.allSettled([
+        fetchTravelPlaces(),
+        fetchPlaceCategories()
+      ])
+        .then(([placesResult, categoriesResult]) => {
+          const places = placesResult.status === 'fulfilled' ? placesResult.value : []
+          const categories = categoriesResult.status === 'fulfilled' ? categoriesResult.value : []
+
           if (!Array.isArray(places) || !places.length) {
+            if (placesResult.status === 'rejected') {
+              throw placesResult.reason
+            }
+
             return
           }
 
           this.places = places
+          this.apiPlaceCategories = Array.isArray(categories) ? categories : []
+
+          if (!this.placeCategories.includes(this.activeCategory)) {
+            this.activeCategory = 'Все'
+          }
 
           if (this._map) {
             this.refreshMapObjects()
@@ -1047,7 +1104,7 @@ export default {
           this.settingsPosition.y,
           this.$refs.settingsWindow,
           360,
-          390
+          this.getSettingsWindowHeight()
         )
         this.animateFloatingWindow('settingsWindow')
       })
@@ -1057,6 +1114,10 @@ export default {
     },
     selectTheme(index) {
       this.selectedThemeIndex = index
+    },
+    selectUiTheme(value) {
+      this.uiTheme = value
+      setStoredUiTheme(value)
     },
     startSettingsDrag(event) {
       if (event.target.closest('.c-map-page__settingsClose')) {
@@ -1081,7 +1142,7 @@ export default {
         event.clientY - this.settingsDrag.shiftY,
         this.$refs.settingsWindow,
         360,
-        390
+        this.getSettingsWindowHeight()
       )
     },
     stopSettingsDrag() {
@@ -1131,6 +1192,15 @@ export default {
     getLimitedSavedRoutesPosition(x, y) {
       return this.getLimitedPanelPosition(x, y, this.$refs.savedRoutesWindow, 460, 420)
     },
+    getSettingsWindowHeight() {
+      const panel = this.$refs.settingsWindow
+
+      if (!panel) {
+        return Math.min(640, Math.max(360, window.innerHeight - this.settingsPosition.y - 14))
+      }
+
+      return Math.min(panel.scrollHeight, window.innerHeight - 24)
+    },
     getLimitedPanelPosition(x, y, panel, defaultWidth, defaultHeight) {
       const width = panel ? panel.offsetWidth : defaultWidth
       const height = panel ? panel.offsetHeight : defaultHeight
@@ -1157,6 +1227,31 @@ export default {
       window.clearTimeout(this.mapErrorTimer)
       this.mapError = ''
       this.mapErrorTimer = null
+    },
+    onViewportResize() {
+      if (this.settingsOpen) {
+        this.settingsPosition = this.getLimitedPanelPosition(
+          this.settingsPosition.x,
+          this.settingsPosition.y,
+          this.$refs.settingsWindow,
+          360,
+          this.getSettingsWindowHeight()
+        )
+      }
+
+      if (this.catalogOpen) {
+        this.catalogPosition = this.getLimitedPanelPosition(
+          this.catalogPosition.x,
+          this.catalogPosition.y,
+          this.$refs.catalogWindow,
+          720,
+          620
+        )
+      }
+
+      if (this.savedRoutesOpen) {
+        this.savedRoutesPosition = this.getLimitedSavedRoutesPosition(this.savedRoutesPosition.x, this.savedRoutesPosition.y)
+      }
     },
     loadYandexApi() {
       if (window.ymaps) {
@@ -1487,6 +1582,37 @@ export default {
         points,
         timeText: info.timeText,
         distanceText: info.distanceText
+      })
+
+      this.saveRouteToBackend(points, info, title)
+    },
+    getPlaceIdsForPoints(points) {
+      return points
+        .map((point) => this.getPlaceByCoords(point)?.id)
+        .filter(Boolean)
+    },
+    saveRouteToBackend(points, info, title) {
+      if (!hasApiAccessToken()) {
+        return
+      }
+
+      saveTravelRoute({
+        title,
+        type: title.toLowerCase().includes('альтернатив') ? 'alternative' : 'main',
+        points,
+        placeIds: this.getPlaceIdsForPoints(points),
+        freeTimeHours: this.freeTime,
+        humanSpeedKmH: this.humanSpeed,
+        routeInfo: {
+          canVisit: Boolean(info.canVisit),
+          distanceKm: Number(info.distanceKm || 0),
+          totalSeconds: Number(info.totalSeconds || 0),
+          timeText: info.timeText || '',
+          distanceText: info.distanceText || '',
+          message: info.message || ''
+        }
+      }).catch((error) => {
+        console.warn('Backend route saving failed', error)
       })
     },
     drawRoute(points, color, title = '') {
@@ -2160,8 +2286,10 @@ export default {
   &__settingsWindow {
     position: fixed;
     z-index: 21;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
     width: min(360px, calc(100vw - 24px));
-    max-height: min(560px, calc(100dvh - 24px));
+    max-height: min(var(--c-map-settings-max-height, 640px), calc(100dvh - 24px));
     overflow: hidden;
     border: 1px solid rgba(247, 238, 220, 0.22);
     border-radius: 26px;
@@ -2230,9 +2358,11 @@ export default {
   &__settingsBody {
     display: grid;
     gap: 14px;
-    max-height: calc(100dvh - 126px);
+    min-height: 0;
+    max-height: none;
     padding: 14px;
-    overflow: auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   &__settingsText,
@@ -2246,6 +2376,51 @@ export default {
   &__themeList {
     display: grid;
     gap: 8px;
+  }
+
+  &__uiStyleList {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  &__uiStyleList &__settingsSubtitle {
+    grid-column: 1 / -1;
+  }
+
+  &__uiStyleBtn {
+    display: grid;
+    gap: 4px;
+    min-height: 62px;
+    padding: 11px 12px;
+    border: 1px solid rgba(247, 238, 220, 0.14);
+    border-radius: 15px;
+    background: rgba(255, 255, 255, 0.055);
+    color: var(--c-map-text);
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.22s ease;
+
+    &:hover,
+    &--active {
+      border-color: var(--c-map-accent);
+      background: rgba(109, 242, 205, 0.14);
+      box-shadow: inset 0 0 0 1px rgba(109, 242, 205, 0.12);
+    }
+  }
+
+  &__uiStyleTitle {
+    font-size: 13px;
+    font-weight: 900;
+    line-height: 1.1;
+  }
+
+  &__uiStyleText {
+    color: var(--c-map-muted);
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1.1;
+    text-transform: uppercase;
   }
 
   &__themeBtn {
@@ -2937,6 +3112,261 @@ export default {
   &__error {
     background: rgba(128, 24, 24, 0.92);
     animation: c-map-toast-in 0.18s ease;
+  }
+
+  &--pixel {
+    --c-map-bg: #07071d;
+    --c-map-card: rgba(7, 7, 29, 0.92);
+    --c-map-line: #3b3f8f;
+    --c-map-text: #fff7d6;
+    --c-map-muted: #b9b4d8;
+    --c-map-accent: #39ff88;
+    --c-map-warm: #ffd23f;
+    --c-map-panel: rgba(9, 10, 36, 0.95);
+    background:
+      linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+      linear-gradient(135deg, #08081e 0%, #17123d 48%, #08081e 100%);
+    background-size: 12px 12px, 12px 12px, auto;
+    font-family: 'Courier New', Consolas, monospace;
+    image-rendering: pixelated;
+    isolation: isolate;
+    position: relative;
+
+    &::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0.18;
+      background: repeating-linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.14) 0,
+        rgba(255, 255, 255, 0.14) 1px,
+        transparent 1px,
+        transparent 5px
+      );
+      mix-blend-mode: soft-light;
+    }
+
+    .c-map-page__mapWrap {
+      position: relative;
+      z-index: 1;
+    }
+
+    .c-map-page__panel,
+    .c-map-page__catalogWindow,
+    .c-map-page__infoWindow,
+    .c-map-page__settingsWindow,
+    .c-map-page__savedWindow,
+    .c-map-page__placePreview,
+    .c-map-page__status,
+    .c-map-page__distance,
+    .c-map-page__summaryItem,
+    .c-map-page__field,
+    .c-map-page__futureBox,
+    .c-map-page__mapOverlay,
+    .c-map-page__loader,
+    .c-map-page__error {
+      border: 2px solid #fff7d6;
+      border-radius: 0;
+      background:
+        linear-gradient(180deg, rgba(24, 20, 65, 0.96), rgba(8, 9, 31, 0.96)),
+        linear-gradient(90deg, rgba(57, 255, 136, 0.1), transparent);
+      box-shadow:
+        4px 4px 0 #000,
+        inset 0 0 0 2px rgba(57, 255, 136, 0.14);
+      backdrop-filter: none;
+    }
+
+    .c-map-page__panel {
+      border-width: 0 3px 0 0;
+      box-shadow: 7px 0 0 #000;
+    }
+
+    .c-map-page__settingsHead {
+      padding: 16px 16px 10px;
+    }
+
+    .c-map-page__settingsBody {
+      gap: 10px;
+      padding: 12px 14px 18px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--c-map-accent) #17123d;
+    }
+
+    .c-map-page__settingsBody::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .c-map-page__settingsBody::-webkit-scrollbar-track {
+      background: #17123d;
+    }
+
+    .c-map-page__settingsBody::-webkit-scrollbar-thumb {
+      background: var(--c-map-accent);
+    }
+
+    .c-map-page__settingsText {
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .c-map-page__uiStyleBtn {
+      min-height: 54px;
+      padding: 9px 10px;
+    }
+
+    .c-map-page__themeBtn {
+      min-height: 38px;
+      padding: 7px 9px;
+    }
+
+    .c-map-page__settingsSubtitle {
+      margin: 0;
+      font-size: 12px;
+    }
+
+    .c-map-page__routeColorList {
+      gap: 8px;
+    }
+
+    .c-map-page__routeColorField {
+      min-height: 44px;
+      padding: 7px 8px 7px 10px;
+    }
+
+    .c-map-page__title,
+    .c-map-page__catalogTitle,
+    .c-map-page__infoTitle,
+    .c-map-page__settingsTitle,
+    .c-map-page__savedTitle,
+    .c-map-page__placePreviewTitle {
+      font-family: 'Courier New', Consolas, monospace;
+      font-weight: 900;
+      text-shadow: 2px 2px 0 #000;
+      letter-spacing: 0;
+    }
+
+    .c-map-page__eyebrow,
+    .c-map-page__catalogKicker,
+    .c-map-page__infoKicker,
+    .c-map-page__settingsKicker,
+    .c-map-page__savedKicker,
+    .c-map-page__placePreviewKicker,
+    .c-map-page__statusLabel,
+    .c-map-page__futureLabel {
+      color: var(--c-map-accent);
+      text-shadow: 2px 2px 0 #000;
+    }
+
+    .c-map-page__back,
+    .c-map-page__button,
+    .c-map-page__toolBtn,
+    .c-map-page__themeBtn,
+    .c-map-page__uiStyleBtn,
+    .c-map-page__categoryBtn,
+    .c-map-page__placeBtn,
+    .c-map-page__placePreviewBtn,
+    .c-map-page__savedBtn,
+    .c-map-page__searchBtn,
+    .c-map-page__settingsClose,
+    .c-map-page__catalogClose,
+    .c-map-page__infoClose,
+    .c-map-page__savedClose,
+    .c-map-page__placePreviewClose {
+      border: 2px solid #fff7d6;
+      border-radius: 0;
+      background: #17123d;
+      color: var(--c-map-text);
+      box-shadow: 3px 3px 0 #000;
+      text-transform: uppercase;
+      transition: transform 0.12s ease, background-color 0.12s ease, color 0.12s ease;
+
+      &:hover {
+        background: var(--c-map-accent);
+        color: #07071d;
+        transform: translate(-1px, -1px);
+        box-shadow: 4px 4px 0 #000;
+      }
+    }
+
+    .c-map-page__button--primary,
+    .c-map-page__toolBtn--catalog,
+    .c-map-page__themeBtn--active,
+    .c-map-page__uiStyleBtn--active,
+    .c-map-page__categoryBtn--active,
+    .c-map-page__savedBtn--active {
+      border-color: var(--c-map-accent);
+      background: #122c2d;
+      color: var(--c-map-accent);
+    }
+
+    .c-map-page__buttonIcon,
+    .c-map-page__toolIcon,
+    .c-map-page__summaryValue,
+    .c-map-page__placeHighlight,
+    .c-map-page__placePreviewHint,
+    .c-map-page__backIcon {
+      color: var(--c-map-accent);
+      text-shadow: 2px 2px 0 #000;
+    }
+
+    .c-map-page__input,
+    .c-map-page__searchInput,
+    .c-map-page__routeColorInput {
+      border: 2px solid #fff7d6;
+      border-radius: 0;
+      background: #fff7d6;
+      color: #07071d;
+      box-shadow: inset 3px 3px 0 rgba(0, 0, 0, 0.24);
+      font-family: 'Courier New', Consolas, monospace;
+    }
+
+    .c-map-page__inputWrap,
+    .c-map-page__placeBadge,
+    .c-map-page__placePreviewChip,
+    .c-map-page__catalogCounter {
+      border-radius: 0;
+      background: #27215a;
+      box-shadow: 2px 2px 0 #000;
+    }
+
+    .c-map-page__placeCard {
+      border: 2px solid #3b3f8f;
+      border-radius: 0;
+      background: #111236;
+      box-shadow: 3px 3px 0 #000;
+
+      &--selected {
+        border-color: var(--c-map-accent);
+      }
+    }
+
+    .c-map-page__mapFrame,
+    .c-map-page__map {
+      border-radius: 0;
+    }
+
+    .c-map-page__mapFrame {
+      border: 3px solid #07071d;
+      box-shadow: inset 0 0 0 3px #fff7d6;
+    }
+
+    .c-map-page__mapOverlay {
+      background: #fff7d6;
+      color: #07071d;
+    }
+
+    .c-map-page__mapHint {
+      color: #383155;
+    }
+
+    .c-map-page__error {
+      border-color: #ff5c7a;
+      background: #4a102b;
+    }
   }
 }
 

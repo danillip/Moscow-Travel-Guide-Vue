@@ -17,15 +17,16 @@ echo.
 call :print_status
 echo.
 echo   [1] Start project
-echo   [2] Open frontend and API in browser
+echo   [2] Open frontend in browser
 echo   [3] Show containers status
 echo   [4] Watch logs
 echo   [5] Restart project
 echo   [6] Rebuild and start
 echo   [7] Stop project
+echo   [8] Open backend API in browser
 echo   [0] Exit
 echo.
-choice /c 12345670 /n /m "Choose action: "
+choice /c 123456780 /n /m "Choose action: "
 set "ACTION=%errorlevel%"
 
 if "%ACTION%"=="1" goto start_project
@@ -35,7 +36,8 @@ if "%ACTION%"=="4" goto logs_project
 if "%ACTION%"=="5" goto restart_project
 if "%ACTION%"=="6" goto rebuild_project
 if "%ACTION%"=="7" goto stop_project
-if "%ACTION%"=="8" goto finish
+if "%ACTION%"=="8" goto open_api
+if "%ACTION%"=="9" goto finish
 goto menu
 
 :start_project
@@ -53,8 +55,13 @@ goto pause_menu
 
 :open_project
 echo.
-echo  Opening pages...
+echo  Opening frontend...
 start "" "%FRONT_URL%"
+goto pause_menu
+
+:open_api
+echo.
+echo  Opening backend API...
 start "" "%API_URL%"
 goto pause_menu
 

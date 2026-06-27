@@ -1,15 +1,11 @@
 FROM node:22
 
-RUN npm install -g @vue/cli@~5.0.9
-
 WORKDIR /vue
 
 COPY package*.json ./
-
-RUN npm install
 
 COPY ./ ./
 
 EXPOSE 5173
 
-ENTRYPOINT ["sh", "-c", "npm install && npm run devhost"]
+ENTRYPOINT ["sh", "-c", "test -x node_modules/.bin/vite || npm install --no-audit --no-fund --fetch-retries=5 --fetch-retry-maxtimeout=120000 || npm install --registry=https://registry.npmmirror.com --no-audit --no-fund --fetch-retries=5 --fetch-retry-maxtimeout=120000; npm run devhost"]
