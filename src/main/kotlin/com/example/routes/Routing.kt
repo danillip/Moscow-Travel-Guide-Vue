@@ -1,13 +1,16 @@
 package com.example.routes
 
+import com.example.model.CreateRouteRequest
 import com.example.model.RefreshTokenRequest
 import com.example.model.SignInRequest
 import com.example.model.SignOutRequest
 import com.example.model.SignUpRequest
+import com.example.model.UpdateRouteRequest
 import com.example.model.PlaceCategoriesResponse
 import com.example.model.respondError
 import com.example.plugins.AuthService
 import com.example.plugins.PlaceService
+import com.example.plugins.RouteService
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -16,7 +19,11 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 
-fun Application.configureAuth(authService: AuthService, placeService: PlaceService) {
+fun Application.configureAuth(
+    authService: AuthService,
+    placeService: PlaceService,
+    routeService: RouteService
+) {
     routing {
         get("/") {
             call.respond(HttpStatusCode.OK, "MTG BACKEND")
@@ -120,6 +127,60 @@ fun Application.configureAuth(authService: AuthService, placeService: PlaceServi
                             e.message ?: "Некорректные данные"
                         )
                         return@post
+                    }
+                    call.respond(HttpStatusCode.OK, mapOf("success" to true))
+                }
+
+                get("/routes") {
+                    val principal = call.principal<JWTPrincipal>()!!
+                    val userId = principal.payload.subject
+                    val page = call.queryParameters["page"]?.toIntOrNull() ?: 1
+                    val limit = call.queryParameters["limit"]?.toIntOrNull() ?: 20
+                    val response = routeService.getRoutes(userId, page, limit)
+                    call.respond(HttpStatusCode.OK, response)
+                }
+
+                get("/routes/{routeId}") {
+                    val principal = call.principal<JWTPrincipal>()!!
+                    val userId = principal.payload.subject
+                    val routeId = call.parameters["routeId"]!!
+                    val route = routeService.getRouteById(userId, routeId)
+                    if (route == null) {
+                        call.respondError(HttpStatusCode.NotFound, "NOT_FOUND", "Маршрут не найден")
+                        return@get
+                    }
+                    call.respond(HttpStatusCode.OK, route)
+                }
+
+                post("/routes") {
+                    val principal = call.principal<JWTPrincipal>()!!
+                    val userId = principal.payload.subject
+                    val request = call.receive<CreateRouteRequest>()
+                    val route = routeService.createRoute(userId, request)
+                    call.respond(HttpStatusCode.Created, route)
+                }
+
+                patch("/routes/{routeId}") {
+                    val principal = call.principal<JWTPrincipal>()!!
+                    val userId = principal.payload.subject
+                    val routeId = call.parameters["routeId"]!!
+                    val request = call.receive<UpdateRouteRequest>()
+                    val route = routeService.updateRoute(userId, routeId, request)
+                    if (route == null) {
+                        call.respondError(HttpStatusCode.NotFound, "NOT_FOUND", "Маршрут не найден")
+                        return@patch
+                    }
+                    call.respond(HttpStatusCode.OK, route)
+                }
+
+                delete("/routes/{routeId}") {
+                    val principal = call.principal<JWTPrincipal>()!!
+                    val userId = principal.payload.subject
+                    val routeId = call.parameters["routeId"]!!
+                    val deleted = routeService.deleteRoute(userId, routeId)
+                    if (!deleted) {
+                        call.respondError(HttpStatusCode.NotFound, "NOT_FOUND", "Маршрут не найден")
+                        return@delete
                     }
                     call.respond(HttpStatusCode.OK, mapOf("success" to true))
                 }
