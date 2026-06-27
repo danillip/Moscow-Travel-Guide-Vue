@@ -14,7 +14,7 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.statuspages.StatusPages
 import kotlinx.serialization.json.Json
 
-fun Application.globalSettings(jwtSecret: String, jwtIssuer: String, jwtAudience: String) {
+internal fun Application.globalSettings(jwtSecret: String, jwtIssuer: String, jwtAudience: String) {
     install(Authentication) {
         jwt("auth-jwt") {
             verifier(

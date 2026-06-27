@@ -1,5 +1,8 @@
-package com.example.plugins
+package com.example.database
 
+import com.example.database.table.RefreshTokens
+import com.example.database.table.SavedRoutes
+import com.example.database.table.Users
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import org.jetbrains.exposed.sql.Database
@@ -11,7 +14,7 @@ import javax.inject.Singleton
 data class DbConfig(val url: String, val user: String, val password: String)
 
 @Singleton
-class DatabaseFactory @Inject constructor(private val dbConfig: DbConfig) {
+internal class DatabaseFactory @Inject constructor(private val dbConfig: DbConfig) {
     fun init() {
         val config = HikariConfig().apply {
             driverClassName = "org.postgresql.Driver"

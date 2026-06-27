@@ -1,4 +1,4 @@
-package com.example.plugins
+package com.example.service
 
 import com.example.model.Place
 import com.example.model.PlacesMeta
@@ -8,7 +8,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class PlaceService @Inject constructor() {
+internal class PlaceServiceImpl @Inject constructor() : PlaceService {
 
     private val places: List<Place> by lazy {
         val json = this::class.java.classLoader.getResourceAsStream("places.json")!!
@@ -16,7 +16,7 @@ class PlaceService @Inject constructor() {
         Json.decodeFromString<List<Place>>(json)
     }
 
-    fun getPlaces(
+    override fun getPlaces(
         category: String?,
         search: String?,
         page: Int,
@@ -52,11 +52,11 @@ class PlaceService @Inject constructor() {
         )
     }
 
-    fun getPlaceById(id: String): Place? {
+    override fun getPlaceById(id: String): Place? {
         return places.find { it.id == id && it.isActive }
     }
 
-    fun getCategories(): List<String> {
+    override fun getCategories(): List<String> {
         val categories = places.filter { it.isActive }.map { it.category }.distinct()
         return listOf("Все") + categories
     }
