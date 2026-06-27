@@ -3,6 +3,7 @@ package com.example.di
 import com.example.plugins.AuthService
 import com.example.plugins.DatabaseFactory
 import com.example.plugins.PlaceService
+import com.example.plugins.RouteService
 import dagger.Component
 import javax.inject.Singleton
 
@@ -12,4 +13,5 @@ interface AppComponent {
     fun authService(): AuthService
     fun databaseFactory(): DatabaseFactory
     fun placeService(): PlaceService
+    fun routeService(): RouteService
 }

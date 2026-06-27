@@ -106,3 +106,56 @@ data class PlacesMeta(
 data class PlaceCategoriesResponse(
     val items: List<String>
 )
+
+@Serializable
+data class RouteInfo(
+    val canVisit: Boolean,
+    val distanceKm: Double,
+    val totalSeconds: Int,
+    val timeText: String,
+    val distanceText: String,
+    val message: String
+)
+
+@Serializable
+data class SavedRoute(
+    val id: String,
+    val userId: String,
+    val title: String,
+    val type: String,
+    val points: List<List<Double>>,
+    val placeIds: List<String>,
+    val freeTimeHours: Int,
+    val humanSpeedKmH: Int,
+    val routeInfo: RouteInfo,
+    val createdAt: String,
+    val updatedAt: String
+)
+
+@Serializable
+data class SavedRoutesResponse(
+    val items: List<SavedRoute>,
+    val meta: PlacesMeta
+)
+
+@Serializable
+data class CreateRouteRequest(
+    val title: String,
+    val type: String,
+    val points: List<List<Double>>,
+    val placeIds: List<String>,
+    val freeTimeHours: Int,
+    val humanSpeedKmH: Int,
+    val routeInfo: RouteInfo
+)
+
+@Serializable
+data class UpdateRouteRequest(
+    val title: String? = null,
+    val type: String? = null,
+    val points: List<List<Double>>? = null,
+    val placeIds: List<String>? = null,
+    val freeTimeHours: Int? = null,
+    val humanSpeedKmH: Int? = null,
+    val routeInfo: RouteInfo? = null
+)

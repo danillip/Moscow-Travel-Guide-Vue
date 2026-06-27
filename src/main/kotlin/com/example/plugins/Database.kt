@@ -26,7 +26,7 @@ class DatabaseFactory @Inject constructor(private val dbConfig: DbConfig) {
         val dataSource = HikariDataSource(config)
         Database.connect(dataSource)
         transaction {
-            SchemaUtils.create(Users, RefreshTokens)
+            SchemaUtils.create(Users, RefreshTokens, SavedRoutes)
         }
     }
 }
